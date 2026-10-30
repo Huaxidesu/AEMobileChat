@@ -1,0 +1,10 @@
+{
+  "required": true,
+  "minVersion": "0.7.11",
+  "package": "com.huaxidesu.gtnchat.mixins",
+  "plugin": "com.huaxidesu.gtnchat.mixins.Plugin",
+  "refmap": "mixins.gtnchat.refmap.json",
+  "target": "@env(DEFAULT)",
+  "compatibilityLevel": "JAVA_8"
+}
+

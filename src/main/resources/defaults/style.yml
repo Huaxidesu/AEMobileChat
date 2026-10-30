@@ -1,0 +1,33 @@
+# 聊天片段样式
+#
+# layout 里的 {名字} 会先在这里找同名片段；找不到再按内置占位符处理：
+#   {server}  服务器显示名
+#   {world}   世界名
+#   {player}  玩家名
+#   {message} 玩家说的话
+#
+# text   显示文本，支持 & 颜色码和上面的内置占位符
+# hover  悬停提示，可以写多行
+# click  点击动作
+#          action: run      执行命令
+#                  suggest  把命令填进输入框
+#                  url      打开链接
+#          value:  命令或网址，支持内置占位符
+
+server:
+  text: '&6[&e{server}&6]'
+  hover:
+    - '&7当前服务器: &f{server}'
+
+world:
+  text: '&6[&e{world}&6]'
+  hover:
+    - '&7所在世界: &f{world}'
+
+player:
+  text: '&6<&a{player}&6>'
+  hover:
+    - '&7点击私聊'
+  click:
+    action: suggest
+    value: '/msg {player} '

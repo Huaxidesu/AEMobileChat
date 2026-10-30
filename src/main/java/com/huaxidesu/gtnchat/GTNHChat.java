@@ -1,0 +1,122 @@
+package com.huaxidesu.gtnchat;
+
+import java.io.File;
+
+import net.minecraft.entity.player.EntityPlayerMP;
+import net.minecraft.server.MinecraftServer;
+import net.minecraft.util.IChatComponent;
+
+import org.apache.logging.log4j.LogManager;
+import org.apache.logging.log4j.Logger;
+
+import com.huaxidesu.gtnchat.chat.ChatFormat;
+import com.huaxidesu.gtnchat.client.ClientSetup;
+import com.huaxidesu.gtnchat.command.CommandGTNH;
+import com.huaxidesu.gtnchat.config.Config;
+import com.huaxidesu.gtnchat.config.Rule;
+import com.huaxidesu.gtnchat.nei.NeiLink;
+import com.huaxidesu.gtnchat.net.ChatNet;
+import com.huaxidesu.gtnchat.relay.ChatRelay;
+import com.huaxidesu.gtnchat.util.MainThread;
+
+import cpw.mods.fml.common.FMLCommonHandler;
+import cpw.mods.fml.common.Mod;
+import cpw.mods.fml.common.event.FMLPreInitializationEvent;
+import cpw.mods.fml.common.event.FMLServerStartingEvent;
+import cpw.mods.fml.common.eventhandler.SubscribeEvent;
+import cpw.mods.fml.common.gameevent.PlayerEvent;
+import cpw.mods.fml.common.gameevent.TickEvent;
+import cpw.mods.fml.relauncher.Side;
+import net.minecraftforge.common.MinecraftForge;
+import net.minecraftforge.event.ServerChatEvent;
+
+/**
+ * 聊天格式化与跨服转发的入口。
+ *
+ * <p>服务端负责渲染与转发；客户端只做一件服务端做不到的事 —— 检测成就解锁并上报。
+ * 客户端不装本模组也能正常进服，只是不会有成就公告。
+ */
+@Mod(
+    modid = Tags.MODID,
+    name = Tags.MODNAME,
+    version = Tags.VERSION,
+    acceptableRemoteVersions = "*",
+    acceptableSaveVersions = "*")
+public class GTNHChat {
+
+    public static final Logger LOG = LogManager.getLogger(Tags.MODNAME);
+
+    @Mod.EventHandler
+    public void preInit(FMLPreInitializationEvent event) {
+        Config.init(new File(event.getModConfigurationDirectory(), "gtnchat"));
+        ChatNet.register();
+        NeiLink.available();
+
+        MinecraftForge.EVENT_BUS.register(new ForgeHandlers());
+        FMLCommonHandler.instance().bus().register(new FmlHandlers());
+
+        if (FMLCommonHandler.instance().getSide().isClient()) {
+            ClientSetup.init();
+        }
+        LOG.info("已加载，服务器标识: " + Config.serverId + "，跨服转发: " + (Config.relayEnabled ? "开" : "关"));
+    }
+
+    @Mod.EventHandler
+    public void serverStarting(FMLServerStartingEvent event) {
+        event.registerServerCommand(new CommandGTNH());
+    }
+
+    // ------------------------------------------------------------ 事件
+
+    /** Forge 总线：玩家聊天、NEI 的客户端上报包。 */
+    public static final class ForgeHandlers {
+
+        @SubscribeEvent
+        public void onChat(ServerChatEvent event) {
+            if (event.player == null || event.message == null) return;
+            final EntityPlayerMP player = event.player;
+            try {
+                final String message = ChatFormat.sanitize(event.message);
+                final Rule rule = ChatFormat.pick(player);
+
+                ChatFormat.Ctx ctx = new ChatFormat.Ctx();
+                ctx.player = player.getCommandSenderName();
+                ctx.world = ChatFormat.worldName(player);
+                ctx.server = Config.serverDisplay;
+                ctx.message = message;
+                ctx.keepClick = true;
+
+                final IChatComponent line = ChatFormat.render(ctx, rule);
+                final String ruleName = rule.name;
+
+                // 取消原版广播，改由本模组统一发一条格式化后的消息。
+                event.setCanceled(true);
+                MainThread.submit(new Runnable() {
+
+                    @Override
+                    public void run() {
+                        MinecraftServer.getServer().getConfigurationManager().sendChatMsg(line);
+                        ChatRelay.forwardChat(player, message, ruleName);
+                    }
+                });
+            } catch (Throwable t) {
+                LOG.warn("处理玩家聊天失败", t);
+            }
+        }
+    }
+
+    /** FML 总线：tick、玩家进服。 */
+    public static final class FmlHandlers {
+
+        @SubscribeEvent
+        public void onServerTick(TickEvent.ServerTickEvent event) {
+            if (event.phase == TickEvent.Phase.END) MainThread.drain();
+        }
+
+        @SubscribeEvent
+        public void onLogin(PlayerEvent.PlayerLoggedInEvent event) {
+            if (!(event.player instanceof EntityPlayerMP)) return;
+            ChatRelay.sendHello((EntityPlayerMP) event.player);
+        }
+    }
+}

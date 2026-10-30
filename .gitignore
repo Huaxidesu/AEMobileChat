@@ -6,8 +6,11 @@
 *.jar
 !/gradle/wrapper/gradle-wrapper.jar
 
-# 本地依赖（由 tools/fetch-deps 下载，不进仓库）
-/lib/
+# Gradle 本地状态
+/.gradle/
+
+# 运行目录（开发环境跑起来后生成）
+/run/
 
 # IDE
 .idea/

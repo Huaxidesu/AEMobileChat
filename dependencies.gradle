@@ -1,0 +1,9 @@
+// Add your dependencies here
+
+dependencies {
+    // 仅编译期引用 NEI 的服务端方法签名，用于一处注入点；运行期完全走反射调用，
+    // 不打包、不复制任何 NEI 代码，NEI 缺失时相关功能整体跳过。
+    compileOnly('com.github.GTNewHorizons:NotEnoughItems:2.8.145-GTNH') {
+        transitive = false
+    }
+}
