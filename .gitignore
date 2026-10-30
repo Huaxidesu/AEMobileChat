@@ -1,0 +1,28 @@
+# 构建产物
+/build/
+/out/
+/classes/
+*.class
+*.jar
+!/gradle/wrapper/gradle-wrapper.jar
+
+# 本地依赖（由 tools/fetch-deps 下载，不进仓库）
+/lib/
+
+# IDE
+.idea/
+*.iml
+*.ipr
+*.iws
+.vscode/
+/.settings
+/.project
+/.classpath
+/nbproject
+
+# 本地文档：不进仓库
+/doc/
+
+# 系统杂物
+*.DS_Store
+Thumbs.db
