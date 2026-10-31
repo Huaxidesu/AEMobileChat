@@ -9,6 +9,7 @@ import net.minecraft.util.IChatComponent;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 
+import com.huaxidesu.gtnchat.bridge.MobileBridge;
 import com.huaxidesu.gtnchat.chat.ChatFormat;
 import com.huaxidesu.gtnchat.client.ClientSetup;
 import com.huaxidesu.gtnchat.command.CommandGTNH;
@@ -90,6 +91,8 @@ public class GTNHChat {
 
                 final IChatComponent line = ChatFormat.render(ctx, rule);
                 final String ruleName = rule.name;
+                final String world = ctx.world;
+                final String who = ctx.player;
 
                 // 取消原版广播，改由本模组统一发一条格式化后的消息。
                 event.setCanceled(true);
@@ -97,6 +100,9 @@ public class GTNHChat {
 
                     @Override
                     public void run() {
+                        // 手机端要在广播前拿到元数据，否则只能把整行当成服务器消息
+                        MobileBridge.push(line, who, world, message, Config.serverDisplay, false,
+                            MobileBridge.KIND_GAME);
                         MinecraftServer.getServer().getConfigurationManager().sendChatMsg(line);
                         ChatRelay.forwardChat(player, message, ruleName);
                     }

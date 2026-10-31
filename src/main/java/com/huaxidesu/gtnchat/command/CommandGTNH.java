@@ -7,12 +7,15 @@ import java.util.List;
 import net.minecraft.command.ICommand;
 import net.minecraft.command.ICommandSender;
 import net.minecraft.entity.player.EntityPlayerMP;
+import net.minecraft.event.ClickEvent;
+import net.minecraft.event.HoverEvent;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.util.ChatComponentText;
 import net.minecraft.util.ChatStyle;
 import net.minecraft.util.IChatComponent;
 
 import com.huaxidesu.gtnchat.Tags;
+import com.huaxidesu.gtnchat.bridge.MobileBridge;
 import com.huaxidesu.gtnchat.chat.ChatFormat;
 import com.huaxidesu.gtnchat.config.Config;
 import com.huaxidesu.gtnchat.config.Rule;
@@ -31,7 +34,7 @@ public class CommandGTNH implements ICommand {
 
     @Override
     public String getCommandUsage(ICommandSender sender) {
-        return "/gtchat reload | version | status | test <chat|achievement|relay|nei> ...";
+        return "/gtchat reload | version | status | test <chat|achievement|relay|nei|item> ...";
     }
 
     @Override
@@ -65,6 +68,7 @@ public class CommandGTNH implements ICommand {
             reply(sender, "跨服转发: " + (Config.relayEnabled ? "开" : "关") + "，通道 " + Config.relayChannel + "，协议 " + Config.relayProtocol);
             reply(sender, "成就公告: " + (Config.achievementEnabled ? "开" : "关")
                 + "，NEI 桥: " + (NeiLink.available() ? (NeiLink.hookApplied() ? "可用（已注入）" : "可用（未注入）") : "不可用"));
+            reply(sender, "手机端桥: " + (MobileBridge.enabled() ? "已接上" : "未发现 AEMobile"));
             return;
         }
         if ("test".equals(sub)) {
@@ -76,7 +80,7 @@ public class CommandGTNH implements ICommand {
 
     private void test(ICommandSender sender, String[] args) {
         if (args.length < 2) {
-            reply(sender, "/gtchat test chat <内容> | json <内容> | bench [次数] | achievement <成就ID> | relay <内容> | nei");
+            reply(sender, "/gtchat test chat <内容> | json <内容> | bench [次数] | achievement <成就ID> | relay <内容> | nei | item [物品名]");
             return;
         }
         String kind = args[1].toLowerCase();
@@ -104,6 +108,8 @@ public class CommandGTNH implements ICommand {
             ctx.player = asPlayer(sender) == null ? "Steve" : asPlayer(sender).getCommandSenderName();
             ctx.server = Config.serverDisplay;
             IChatComponent line = ChatFormat.render(ctx, Config.achievementLayout.replace("{achievement}", id));
+            // 和真实路径一致：手机端只收成就名，系统行自己拼玩家名
+            MobileBridge.push(line, ctx.player, "", id, Config.serverDisplay, false, MobileBridge.KIND_ACHIEVEMENT);
             MinecraftServer.getServer().getConfigurationManager().sendChatMsg(line);
             ChatRelay.forwardAchievement(ctx.player, id);
             reply(sender, "已广播成就公告: " + id);
@@ -121,6 +127,26 @@ public class CommandGTNH implements ICommand {
         }
         if ("nei".equals(kind)) {
             reply(sender, "NEI 桥: " + (NeiLink.available() ? (NeiLink.hookApplied() ? "可用（已注入）" : "可用（未注入）") : "未检测到 NEI"));
+            return;
+        }
+        if ("item".equals(kind)) {
+            // 造一条和 NEI 真实分享同构的消息：文本 + /nei_bookmark 点击 + 多行悬停。
+            // 本机没有真人用 NEI 分享时，靠这条验证手机端能否把物品从正文里认出来。
+            String name = args.length > 2 ? join(args, 2) : "石头";
+            ChatComponentText item = new ChatComponentText("[" + name + "]");
+            ChatStyle st = new ChatStyle();
+            st.setChatClickEvent(new ClickEvent(ClickEvent.Action.RUN_COMMAND, "/nei_bookmark test" + System.nanoTime()));
+            st.setChatHoverEvent(new HoverEvent(HoverEvent.Action.SHOW_TEXT,
+                new ChatComponentText("GT " + name + "\n可堆叠 64")));
+            item.setChatStyle(st);
+
+            ChatFormat.Ctx ctx = sample();
+            ctx.server = "测试服";
+            ctx.item = item;
+            IChatComponent line = ChatFormat.render(ctx, Config.neiLayout);
+            MobileBridge.push(line, "Steve", "", "", "测试服", true, MobileBridge.KIND_GAME);
+            MinecraftServer.getServer().getConfigurationManager().sendChatMsg(line);
+            reply(sender, "已广播物品链接: " + name);
             return;
         }
         if ("json".equals(kind)) {
@@ -274,7 +300,7 @@ public class CommandGTNH implements ICommand {
             return out;
         }
         if (args.length == 2 && "test".equalsIgnoreCase(args[0])) {
-            return Arrays.asList("chat", "json", "bench", "achievement", "relay", "nei");
+            return Arrays.asList("chat", "json", "bench", "achievement", "relay", "nei", "item");
         }
         return null;
     }

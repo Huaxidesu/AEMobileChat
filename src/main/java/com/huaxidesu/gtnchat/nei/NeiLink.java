@@ -23,6 +23,7 @@ import net.minecraft.util.ChatStyle;
 import net.minecraft.util.IChatComponent;
 
 import com.huaxidesu.gtnchat.GTNHChat;
+import com.huaxidesu.gtnchat.bridge.MobileBridge;
 import com.huaxidesu.gtnchat.chat.ChatFormat;
 import com.huaxidesu.gtnchat.config.Config;
 import com.huaxidesu.gtnchat.relay.ChatRelay;
@@ -146,6 +147,8 @@ public final class NeiLink {
             ctx.keepClick = true;
             ctx.item = itemComponent(tag, id);
             IChatComponent line = ChatFormat.render(ctx, Config.neiLayout);
+            // 物品名与悬停提示由手机端从组件里还原，这里只补「谁、来自哪台服务器」
+            MobileBridge.push(line, player, "", "", originDisplay, true, MobileBridge.KIND_GAME);
             MinecraftServer.getServer().getConfigurationManager().sendChatMsg(line);
         } catch (Throwable t) {
             GTNHChat.LOG.warn("转发物品链接失败", t);

@@ -17,6 +17,7 @@ import net.minecraft.stats.AchievementList;
 import net.minecraft.util.IChatComponent;
 
 import com.huaxidesu.gtnchat.GTNHChat;
+import com.huaxidesu.gtnchat.bridge.MobileBridge;
 import com.huaxidesu.gtnchat.chat.ChatFormat;
 import com.huaxidesu.gtnchat.config.Config;
 import com.huaxidesu.gtnchat.config.Rule;
@@ -209,6 +210,8 @@ public final class ChatRelay {
                 ctx.message = message;
                 ctx.keepClick = Config.relayKeepClick;
                 IChatComponent line = ChatFormat.render(ctx, rule(ruleName));
+                // 手机端据此把消息归到玩家气泡，并标注来自哪台服务器
+                MobileBridge.push(line, sender, world, message, originDisplay, true, MobileBridge.KIND_GAME);
                 MinecraftServer.getServer().getConfigurationManager().sendChatMsg(line);
             }
         });
@@ -226,6 +229,7 @@ public final class ChatRelay {
                 ctx.player = player;
                 ctx.server = Config.serverDisplay;
                 IChatComponent line = ChatFormat.render(ctx, Config.achievementLayout.replace("{achievement}", achievement));
+                MobileBridge.push(line, player, "", achievement, Config.serverDisplay, false, MobileBridge.KIND_ACHIEVEMENT);
                 MinecraftServer.getServer().getConfigurationManager().sendChatMsg(line);
             }
         });
@@ -269,6 +273,7 @@ public final class ChatRelay {
                 ctx.player = player;
                 ctx.server = Config.serverDisplay;
                 IChatComponent line = ChatFormat.render(ctx, Config.achievementLayout.replace("{achievement}", name));
+                MobileBridge.push(line, player, "", name, Config.serverDisplay, false, MobileBridge.KIND_ACHIEVEMENT);
                 MinecraftServer.getServer().getConfigurationManager().sendChatMsg(line);
                 forwardAchievement(player, name);
             }
