@@ -31,3 +31,12 @@ player:
   click:
     action: suggest
     value: '/msg {player} '
+
+# 管理员用的名字片段：名字是红色。规则里写 {playerop} 就会用这一段。
+playerop:
+  text: '&6<&c{player}&6>'
+  hover:
+    - '&7点击私聊'
+  click:
+    action: suggest
+    value: '/msg {player} '

@@ -1,8 +1,11 @@
 package com.huaxidesu.gtnchat.chat;
 
 import java.lang.reflect.Method;
+import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
 import java.util.UUID;
+import java.util.concurrent.ConcurrentHashMap;
 
 import net.minecraft.entity.player.EntityPlayerMP;
 import net.minecraft.event.ClickEvent;
@@ -20,6 +23,9 @@ import com.huaxidesu.gtnchat.config.Style;
  *
  * <p>渲染全程只做字符串拼接和组件组装，不访问世界、不发包、不碰命令分发器，
  * 因此可以在网络线程里直接调用，回到主线程后只需要一次广播。
+ *
+ * <p>布局在配置加载后编译成片段数组，规则按玩家缓存几秒：一条聊天的开销主要是字符串拼接，
+ * 不随在线人数变化，也不做任何全服遍历。
  */
 public final class ChatFormat {
 
@@ -28,7 +34,67 @@ public final class ChatFormat {
 
     private static final Rule FALLBACK = new Rule("fallback", "&6[&e{server}&6]{world}{player}&r: {message}", null, -1);
 
+    private static final byte T_LITERAL = 0;
+    private static final byte T_MESSAGE = 1;
+    private static final byte T_ITEM = 2;
+    private static final byte T_STYLE = 3;
+    private static final byte T_BUILTIN = 4;
+
+    /** 布局编译结果：一条聊天只要按顺序走一遍这个数组。 */
+    private static final class Token {
+
+        final byte kind;
+        final String text;
+        final Style style;
+
+        Token(byte kind, String text, Style style) {
+            this.kind = kind;
+            this.text = text;
+            this.style = style;
+        }
+    }
+
+    private static final class Layout {
+
+        static final Layout EMPTY = new Layout(new Token[0]);
+
+        final Token[] tokens;
+
+        Layout(Token[] tokens) {
+            this.tokens = tokens;
+        }
+    }
+
+    private static final Map<String, Layout> LAYOUTS = new ConcurrentHashMap<String, Layout>();
+
+    private static final class Cached {
+
+        final Rule rule;
+        final long at;
+
+        Cached(Rule rule, long at) {
+            this.rule = rule;
+            this.at = at;
+        }
+    }
+
+    /** 规则缓存有效期。权限变更最多晚这么久生效，换来的是每条聊天省掉一次权限查询。 */
+    private static final long RULE_TTL_MS = 5000L;
+
+    private static final Map<UUID, Cached> RULE_CACHE = new ConcurrentHashMap<UUID, Cached>();
+
     private ChatFormat() {}
+
+    /** 配置重载后清空派生数据。 */
+    public static void invalidate() {
+        LAYOUTS.clear();
+        RULE_CACHE.clear();
+    }
+
+    /** 基准测试用：只清规则缓存，保留已编译的布局。 */
+    public static void clearRuleCache() {
+        RULE_CACHE.clear();
+    }
 
     /** 渲染上下文。跨服消息没有在线玩家对象，只能用名字和世界名。 */
     public static final class Ctx {
@@ -43,7 +109,26 @@ public final class ChatFormat {
         public IChatComponent item;
     }
 
+    // ------------------------------------------------------------------ 规则
+
     public static Rule pick(EntityPlayerMP player) {
+        // 只有一条无条件的规则时不必查缓存，这是最常见的配置
+        List<Rule> rules = Config.rules;
+        if (rules.size() == 1) {
+            Rule only = rules.get(0);
+            if (only.op < 0 && only.permission == null) return only;
+        }
+        UUID id = player.getUniqueID();
+        long now = System.currentTimeMillis();
+        Cached cached = RULE_CACHE.get(id);
+        if (cached != null && now - cached.at < RULE_TTL_MS) return cached.rule;
+        Rule rule = match(player);
+        RULE_CACHE.put(id, new Cached(rule, now));
+        return rule;
+    }
+
+    /** 不走缓存地匹配一次，基准测试用。 */
+    public static Rule match(EntityPlayerMP player) {
         for (Rule rule : Config.rules) {
             if (rule.op >= 0 && !player.canCommandSenderUseCommand(rule.op, "gtchat")) continue;
             if (rule.permission != null && !hasPermission(player, rule.permission)) continue;
@@ -52,44 +137,108 @@ public final class ChatFormat {
         return FALLBACK;
     }
 
+    // ------------------------------------------------------------------ 渲染
+
     public static IChatComponent render(Ctx ctx, Rule rule) {
         return render(ctx, rule == null ? FALLBACK.layout : rule.layout);
     }
 
     public static IChatComponent render(Ctx ctx, String layout) {
+        Layout compiled = LAYOUTS.get(layout == null ? "" : layout);
+        if (compiled == null) {
+            compiled = compile(layout == null ? "" : layout);
+            LAYOUTS.put(layout == null ? "" : layout, compiled);
+        }
         ChatComponentText root = new ChatComponentText("");
-        String text = layout == null ? "" : layout;
-        int i = 0;
-        while (i < text.length()) {
-            int open = text.indexOf('{', i);
-            if (open < 0) {
-                McText.append(root, text.substring(i));
-                break;
-            }
-            int close = text.indexOf('}', open);
-            if (close < 0) {
-                McText.append(root, text.substring(i));
-                break;
-            }
-            if (open > i) McText.append(root, text.substring(i, open));
-            String key = text.substring(open + 1, close);
-            if ("message".equals(key)) {
-                McText.append(root, ctx.message);
-            } else if ("item".equals(key) && ctx.item != null) {
-                root.appendSibling(ctx.item);
-            } else {
-                Style style = Config.styles.get(key);
-                if (style != null) {
-                    renderStyle(root, style, ctx);
-                } else {
-                    String value = builtin(key, ctx);
-                    if (value == null) McText.append(root, "{" + key + "}");
-                    else McText.append(root, value);
+        for (Token token : compiled.tokens) {
+            switch (token.kind) {
+                case T_LITERAL:
+                    McText.append(root, token.text);
+                    break;
+                case T_MESSAGE:
+                    McText.append(root, ctx.message);
+                    break;
+                case T_ITEM:
+                    if (ctx.item != null) root.appendSibling(ctx.item);
+                    break;
+                case T_STYLE:
+                    renderStyle(root, token.style, ctx);
+                    break;
+                default: {
+                    String value = builtin(token.text, ctx);
+                    McText.append(root, value == null ? "{" + token.text + "}" : value);
                 }
+            }
+        }
+        return root;
+    }
+
+    /** 基准测试用：跳过布局缓存，每次都重新编译。 */
+    public static IChatComponent renderUncached(Ctx ctx, String layout) {
+        String text = layout == null ? "" : layout;
+        ChatComponentText root = new ChatComponentText("");
+        for (Token token : compile(text).tokens) {
+            switch (token.kind) {
+                case T_LITERAL:
+                    McText.append(root, token.text);
+                    break;
+                case T_MESSAGE:
+                    McText.append(root, ctx.message);
+                    break;
+                case T_ITEM:
+                    if (ctx.item != null) root.appendSibling(ctx.item);
+                    break;
+                case T_STYLE:
+                    renderStyle(root, token.style, ctx);
+                    break;
+                default: {
+                    String value = builtin(token.text, ctx);
+                    McText.append(root, value == null ? "{" + token.text + "}" : value);
+                }
+            }
+        }
+        return root;
+    }
+
+    /** 把布局切成片段：字面量、占位符、样式引用。只在配置变化后做一次。 */
+    private static Layout compile(String layout) {
+        if (layout.isEmpty()) return Layout.EMPTY;
+        List<Token> tokens = new ArrayList<Token>();
+        StringBuilder literal = new StringBuilder();
+        int i = 0;
+        while (i < layout.length()) {
+            int open = layout.indexOf('{', i);
+            int close = open < 0 ? -1 : layout.indexOf('}', open);
+            if (open < 0 || close < 0) {
+                literal.append(layout, i, layout.length());
+                break;
+            }
+            if (open > i) literal.append(layout, i, open);
+            String key = layout.substring(open + 1, close);
+            if ("message".equals(key) || "item".equals(key) || Config.styles.containsKey(key) || isBuiltin(key)) {
+                flushLiteral(tokens, literal);
+                if ("message".equals(key)) {
+                    tokens.add(new Token(T_MESSAGE, null, null));
+                } else if ("item".equals(key)) {
+                    tokens.add(new Token(T_ITEM, null, null));
+                } else if (Config.styles.containsKey(key)) {
+                    tokens.add(new Token(T_STYLE, null, Config.styles.get(key)));
+                } else {
+                    tokens.add(new Token(T_BUILTIN, key, null));
+                }
+            } else {
+                literal.append('{').append(key).append('}');
             }
             i = close + 1;
         }
-        return root;
+        flushLiteral(tokens, literal);
+        return new Layout(tokens.toArray(new Token[tokens.size()]));
+    }
+
+    private static void flushLiteral(List<Token> tokens, StringBuilder literal) {
+        if (literal.length() == 0) return;
+        tokens.add(new Token(T_LITERAL, literal.toString(), null));
+        literal.setLength(0);
     }
 
     private static void renderStyle(IChatComponent parent, Style style, Ctx ctx) {
@@ -148,6 +297,10 @@ public final class ChatFormat {
             i = close + 1;
         }
         return sb.toString();
+    }
+
+    private static boolean isBuiltin(String key) {
+        return "server".equals(key) || "world".equals(key) || "player".equals(key);
     }
 
     private static String builtin(String key, Ctx ctx) {

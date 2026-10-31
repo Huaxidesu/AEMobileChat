@@ -23,6 +23,19 @@ public final class Reflect {
         return "";
     }
 
+    /** 组件序列化成 JSON。这两个名字在开发环境和运行环境各缺一个，只能都试。 */
+    public static String toJson(IChatComponent component) {
+        if (component == null) return "";
+        for (String name : new String[] { "componentToJson", "func_150696_a" }) {
+            try {
+                java.lang.reflect.Method m = IChatComponent.Serializer.class.getMethod(name, IChatComponent.class);
+                Object json = m.invoke(null, component);
+                if (json instanceof String) return (String) json;
+            } catch (Throwable ignored) {}
+        }
+        return "";
+    }
+
     private static Object invoke(Object target, String... names) {
         for (String name : names) {
             try {

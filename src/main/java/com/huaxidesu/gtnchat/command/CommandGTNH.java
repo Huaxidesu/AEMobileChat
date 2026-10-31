@@ -76,7 +76,7 @@ public class CommandGTNH implements ICommand {
 
     private void test(ICommandSender sender, String[] args) {
         if (args.length < 2) {
-            reply(sender, "/gtchat test chat <内容> | achievement <成就ID> | relay <内容> | nei");
+            reply(sender, "/gtchat test chat <内容> | json <内容> | bench [次数] | achievement <成就ID> | relay <内容> | nei");
             return;
         }
         String kind = args[1].toLowerCase();
@@ -112,14 +112,90 @@ public class CommandGTNH implements ICommand {
         if ("relay".equals(kind)) {
             String text = join(args, 2);
             ChatRelay.debugInject("test-origin", "测试服", "Steve", text);
-            reply(sender, "已注入一条来自其它服务器的聊天");
+            // 没有玩家时把接收端渲染出来的样子回显，方便核对来源服务器名与格式
+            ChatFormat.Ctx ctx = sample();
+            ctx.server = "测试服";
+            ctx.message = ChatFormat.sanitize(text);
+            reply(sender, "接收端渲染: " + describe(ChatFormat.render(ctx, Config.rules.isEmpty() ? null : Config.rules.get(Config.rules.size() - 1))));
             return;
         }
         if ("nei".equals(kind)) {
-            reply(sender, "NEI 桥: " + (NeiLink.available() ? "可用" : "未检测到 NEI"));
+            reply(sender, "NEI 桥: " + (NeiLink.available() ? (NeiLink.hookApplied() ? "可用（已注入）" : "可用（未注入）") : "未检测到 NEI"));
+            return;
+        }
+        if ("json".equals(kind)) {
+            // 第一个参数可以是规则名，用来看指定规则（比如管理员）渲染成什么样
+            Rule rule = null;
+            String text;
+            if (args.length > 2 && findRule(args[2]) != null) {
+                rule = findRule(args[2]);
+                text = join(args, 3);
+            } else {
+                text = join(args, 2);
+            }
+            ChatFormat.Ctx ctx = sample();
+            ctx.message = ChatFormat.sanitize(text);
+            IChatComponent line = ChatFormat.render(ctx, rule != null ? rule : (Config.rules.isEmpty() ? null : Config.rules.get(Config.rules.size() - 1)));
+            String json = com.huaxidesu.gtnchat.util.Reflect.toJson(line);
+            reply(sender, json.isEmpty() ? "序列化失败" : json);
+            return;
+        }
+        if ("bench".equals(kind)) {
+            bench(sender, args.length > 2 ? args[2] : "20000");
             return;
         }
         reply(sender, "未知的测试类型: " + kind);
+    }
+
+    private static Rule findRule(String name) {
+        for (Rule r : Config.rules) {
+            if (r.name.equals(name)) return r;
+        }
+        return null;
+    }
+
+    private static ChatFormat.Ctx sample() {
+        ChatFormat.Ctx ctx = new ChatFormat.Ctx();
+        ctx.player = "Steve";
+        ctx.world = "主世界";
+        ctx.server = Config.serverDisplay;
+        ctx.message = "hello world";
+        ctx.keepClick = true;
+        return ctx;
+    }
+
+    /** 渲染开销基准：分别测「布局已编译」和「每次重新编译」两条路径。 */
+    private static void bench(ICommandSender sender, String countText) {
+        int n;
+        try {
+            n = Math.max(1000, Math.min(200000, Integer.parseInt(countText.trim())));
+        } catch (NumberFormatException e) {
+            n = 20000;
+        }
+        String layout = Config.rules.isEmpty() ? "&6[&e{server}&6]{world}{player}&r: {message}" : Config.rules.get(Config.rules.size() - 1).layout;
+        ChatFormat.Ctx ctx = sample();
+
+        for (int i = 0; i < 2000; i++) ChatFormat.render(ctx, layout);
+
+        long t0 = System.nanoTime();
+        for (int i = 0; i < n; i++) ChatFormat.render(ctx, layout);
+        long cached = System.nanoTime() - t0;
+
+        for (int i = 0; i < 2000; i++) ChatFormat.renderUncached(ctx, layout);
+
+        t0 = System.nanoTime();
+        for (int i = 0; i < n; i++) ChatFormat.renderUncached(ctx, layout);
+        long raw = System.nanoTime() - t0;
+
+        // 不带样式的布局：用来区分「颜色码解析」和「悬停/点击构造」各占多少
+        String plainLayout = "&6[&e{server}&6]{world}{player}&r: {message}";
+        for (int i = 0; i < 2000; i++) ChatFormat.render(ctx, plainLayout);
+        t0 = System.nanoTime();
+        for (int i = 0; i < n; i++) ChatFormat.render(ctx, plainLayout);
+        long plain = System.nanoTime() - t0;
+
+        reply(sender, String.format("渲染 %d 次：已编译布局 %.0f ns/次，每次重编译 %.0f ns/次，无悬停点击 %.0f ns/次", n,
+            cached / (double) n, raw / (double) n, plain / (double) n));
     }
 
     private static void broadcastAs(EntityPlayerMP player, String message) {
@@ -198,7 +274,7 @@ public class CommandGTNH implements ICommand {
             return out;
         }
         if (args.length == 2 && "test".equalsIgnoreCase(args[0])) {
-            return Arrays.asList("chat", "achievement", "relay", "nei");
+            return Arrays.asList("chat", "json", "bench", "achievement", "relay", "nei");
         }
         return null;
     }

@@ -16,10 +16,13 @@ chat:
   #   permission: 权限节点；没有权限插件时按 op 等级判断
   #   op:         需要的 op 等级，0-4
   # 两个条件都不写表示任何玩家都匹配。顺序就是文件里的书写顺序。
+  #
+  # 规则里的 {playerop} 是 style.yml 里同名片段，管理员的名字用它显示成红色；
+  # 普通玩家用 {player}。想让管理员换别的样式，改 style.yml 的 playerop 即可。
   rules:
     admin:
-      permission: gtnchat.style.admin
-      layout: '&6[&e{server}&6]{world}{player}&r: {message}'
+      op: 1
+      layout: '&6[&e{server}&6]{world}{playerop}&r: {message}'
     default:
       layout: '&6[&e{server}&6]{world}{player}&r: {message}'
 

@@ -87,6 +87,8 @@ public final class Config {
 
     public static synchronized void reload() {
         lastError = null;
+        // 布局与规则缓存是从配置派生的，重载后必须作废
+        com.huaxidesu.gtnchat.chat.ChatFormat.invalidate();
         try {
             Map<String, Object> root = Yaml.parse(read("config.yml"));
             Map<String, Object> server = map(root.get("server"));

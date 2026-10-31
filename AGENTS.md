@@ -94,9 +94,13 @@ iconv -f GBK -t UTF-8 logs/latest.log | grep "GTNHChat"
 ```
 
 可用子命令：`reload` / `version` / `status` /
-`test chat <内容>` / `test achievement <成就ID>` / `test relay <内容>` / `test nei`。
+`test chat <内容>` / `test json [规则名] <内容>` / `test bench [次数]` /
+`test achievement <成就ID>` / `test relay <内容>` / `test nei`。
 
-`test chat` 在无人在线时会把渲染后的组件树摊平回显，可以逐段核对颜色、悬停、点击。
+- `test chat`：无人在线时把渲染后的组件树摊平回显，逐段核对颜色、悬停、点击
+- `test json`：输出真正发给客户端的 JSON，看 `color` / `clickEvent` / `hoverEvent`
+- `test bench`：渲染开销基准
+- `test relay`：造一条「来自其它服务器」的消息，验证来源服务器名与接收端渲染
 
 跨服要两台后端才测得出来：两台都装本模组、`server.id` 必须不同，
 同组不需要配置（本项目不做分组）。

@@ -76,6 +76,8 @@ public class GTNHChat {
             if (event.player == null || event.message == null) return;
             final EntityPlayerMP player = event.player;
             try {
+                // 这里跑在网络线程：渲染在此完成，广播回主线程
+                if (Config.debug) LOG.info("收到聊天，当前线程: " + Thread.currentThread().getName());
                 final String message = ChatFormat.sanitize(event.message);
                 final Rule rule = ChatFormat.pick(player);
 
