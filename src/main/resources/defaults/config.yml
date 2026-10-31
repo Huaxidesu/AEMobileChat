@@ -22,7 +22,7 @@ chat:
   rules:
     admin:
       op: 1
-      layout: '{server}{world}{team}{admin}{player}&r: {message}'
+      layout: '{server}{world}{team}{playerop}&f: {message}'
     default:
       layout: '{server}{world}{team}{player}&r: {message}'
 

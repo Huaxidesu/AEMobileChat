@@ -43,11 +43,15 @@ player:
     action: suggest
     value: '/msg {player} '
 
-# 管理员用的名字片段：名字是红色。规则里写 {playerop} 就会用这一段。
+# 管理员名字（红色）。规则里写 {playerop} 就会用这一段。
+# 悬停里带上团队和职务，管理员的身份一眼能看出来。
 playerop:
-  text: '&6<&c{player}&6>'
+  text: '&c{player}'
   hover:
-    - '&7点击私聊'
+    - '&6名字: &c{player}'
+    - '&c管理员'
+    - '&6团队: &b{team}'
+    - '&6团队职务: &e{teamrank}'
   click:
     action: suggest
     value: '/msg {player} '

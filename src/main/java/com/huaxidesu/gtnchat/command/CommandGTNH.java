@@ -17,6 +17,7 @@ import net.minecraft.util.IChatComponent;
 import com.huaxidesu.gtnchat.Tags;
 import com.huaxidesu.gtnchat.bridge.MobileBridge;
 import com.huaxidesu.gtnchat.chat.ChatFormat;
+import com.huaxidesu.gtnchat.chat.TeamInfo;
 import com.huaxidesu.gtnchat.config.Config;
 import com.huaxidesu.gtnchat.config.Rule;
 import com.huaxidesu.gtnchat.nei.NeiLink;
@@ -127,6 +128,13 @@ public class CommandGTNH implements ICommand {
         }
         if ("nei".equals(kind)) {
             reply(sender, "NEI 桥: " + (NeiLink.available() ? (NeiLink.hookApplied() ? "可用（已注入）" : "可用（未注入）") : "未检测到 NEI"));
+            return;
+        }
+        if ("team".equals(kind)) {
+            EntityPlayerMP target = args.length > 2
+                ? MinecraftServer.getServer().getConfigurationManager().func_152612_a(join(args, 2))
+                : asPlayer(sender);
+            reply(sender, target == null ? "玩家不在线" : TeamInfo.debug(target));
             return;
         }
         if ("item".equals(kind)) {

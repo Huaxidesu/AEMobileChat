@@ -8,6 +8,7 @@ import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
 
 import net.minecraft.entity.player.EntityPlayerMP;
+import net.minecraft.server.MinecraftServer;
 import net.minecraft.event.ClickEvent;
 import net.minecraft.event.HoverEvent;
 import net.minecraft.util.ChatComponentText;
@@ -133,10 +134,26 @@ public final class ChatFormat {
         return rule;
     }
 
+    /**
+     * 是否管理员。
+     *
+     * <p>不能用 {@code player.canCommandSenderUseCommand(1, "gtchat")}：在 Thermos 上
+     * 它对非 op 也返回 true（Bukkit 权限层把没注册的节点当默认允许），结果是所有人都
+     * 匹配到 admin 规则、名字前多一个 [管理员]。这里直接查 op 列表。
+     */
+    private static boolean isOp(EntityPlayerMP player) {
+        try {
+            return MinecraftServer.getServer().getConfigurationManager()
+                .func_152596_g(player.getGameProfile());
+        } catch (Throwable t) {
+            return player.canCommandSenderUseCommand(1, "gtchat");
+        }
+    }
+
     /** 不走缓存地匹配一次，基准测试用。 */
     public static Rule match(EntityPlayerMP player) {
         for (Rule rule : Config.rules) {
-            if (rule.op >= 0 && !player.canCommandSenderUseCommand(rule.op, "gtchat")) continue;
+            if (rule.op >= 0 && !isOp(player)) continue;
             if (rule.permission != null && !hasPermission(player, rule.permission)) continue;
             return rule;
         }

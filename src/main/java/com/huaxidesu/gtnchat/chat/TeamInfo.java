@@ -102,6 +102,28 @@ public final class TeamInfo {
         }
     }
 
+    /** 调试用：把中间状态摊开，排查「有队伍但不显示」这类问题 */
+    public static String debug(EntityPlayerMP player) {
+        check();
+        if (!available) return "ServerUtilities 未加载";
+        if (player == null) return "玩家为 null";
+        try {
+            Object universe = mGetUniverse.invoke(null);
+            if (universe == null) return "Universe 为 null";
+            Object fp = mGetPlayer.invoke(universe, player);
+            if (fp == null) return "ForgePlayer 为 null";
+            Object has = mHasTeam.invoke(fp);
+            Object team = fTeam.get(fp);
+            if (team == null) return "hasTeam=" + has + " team=null";
+            String title = plain(mGetTitle.invoke(team));
+            Object desc = mGetDesc.invoke(team);
+            Object status = mGetStatus.invoke(team, fp);
+            return "hasTeam=" + has + " title=[" + title + "] desc=[" + desc + "] status=" + status;
+        } catch (Throwable t) {
+            return "error=" + t;
+        }
+    }
+
     /** 取玩家所在团队；没有团队或没装模组返回 null */
     public static Info of(EntityPlayerMP player) {
         check();
@@ -134,13 +156,20 @@ public final class TeamInfo {
             if (team == null) return null;
 
             String name = plain(mGetTitle.invoke(team));
-            if (name.isEmpty()) return null;
 
             String desc = "";
             try {
                 Object d = mGetDesc.invoke(team);
                 if (d instanceof String) desc = (String) d;
             } catch (Throwable ignored) {}
+
+            // ServerUtilities 的单人队默认没有名字（title 为空），只有简介。
+            // 这种情况用简介兜底，否则「有队伍但一个字都不显示」，看着像功能没做。
+            if (name.isEmpty()) {
+                String d = desc == null ? "" : desc.trim();
+                if (!d.isEmpty() && d.length() <= 16) name = d;
+            }
+            if (name.isEmpty()) return null;
 
             String rank = "成员";
             try {
