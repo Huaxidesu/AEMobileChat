@@ -19,6 +19,7 @@ import net.minecraft.util.IChatComponent;
 import com.huaxidesu.gtnchat.GTNHChat;
 import com.huaxidesu.gtnchat.bridge.MobileBridge;
 import com.huaxidesu.gtnchat.chat.ChatFormat;
+import com.huaxidesu.gtnchat.chat.TeamInfo;
 import com.huaxidesu.gtnchat.config.Config;
 import com.huaxidesu.gtnchat.config.Rule;
 import com.huaxidesu.gtnchat.nei.NeiLink;
@@ -72,6 +73,11 @@ public final class ChatRelay {
             out.writeUtf(ChatFormat.worldName(sender));
             out.writeUtf(message);
             out.writeUtf(ruleName == null ? "" : ruleName);
+            // 团队信息跟在后面：旧版本没有这三个字段，接收端按剩余字节判断
+            TeamInfo.Info team = TeamInfo.of(sender);
+            out.writeUtf(team == null ? "" : team.name);
+            out.writeUtf(team == null ? "" : team.desc);
+            out.writeUtf(team == null ? "" : team.rank);
             send(out, sender);
         } catch (Throwable t) {
             GTNHChat.LOG.warn("跨服聊天发送失败", t);
@@ -198,6 +204,25 @@ public final class ChatRelay {
         final String world = in.readUTF();
         final String message = in.readUTF();
         final String ruleName = in.readUTF();
+        // 团队三项是后加的：老版本发的帧到这就结束了，读不到就当没有。
+        // 不用 available() 判断 —— 在 Thermos 上它不可靠，会一直返回 0。
+        String t0 = "", t1 = "", t2 = "";
+        try {
+            t0 = in.readUTF();
+            t1 = in.readUTF();
+            t2 = in.readUTF();
+        } catch (java.io.EOFException ignored) {
+        }
+        final String team = t0;
+        final String teamDesc = t1;
+        final String teamRank = t2;
+
+        // 控制台留一条带来源的记录：sendChatMsg 那条只有渲染后的文本，
+        // 服主翻日志时不好确认是从哪台服过来的
+        if (Config.relayLog) {
+            GTNHChat.LOG.info("[跨服] " + originDisplay + " → " + Config.serverDisplay
+                + ": <" + sender + "> " + ChatFormat.sanitize(message));
+        }
 
         MainThread.submit(new Runnable() {
 
@@ -209,9 +234,12 @@ public final class ChatRelay {
                 ctx.server = originDisplay;
                 ctx.message = message;
                 ctx.keepClick = Config.relayKeepClick;
+                ctx.team = team;
+                ctx.teamDesc = teamDesc;
+                ctx.teamRank = teamRank;
                 IChatComponent line = ChatFormat.render(ctx, rule(ruleName));
                 // 手机端据此把消息归到玩家气泡，并标注来自哪台服务器
-                MobileBridge.push(line, sender, world, message, originDisplay, true, MobileBridge.KIND_GAME);
+                MobileBridge.push(line, sender, world, message, originDisplay, true, MobileBridge.KIND_GAME, team);
                 MinecraftServer.getServer().getConfigurationManager().sendChatMsg(line);
             }
         });
@@ -311,6 +339,10 @@ public final class ChatRelay {
             out.writeUtf("测试世界");
             out.writeUtf(message);
             out.writeUtf("default");
+            // 带上假的团队信息，方便验证「队伍名 → 悬停 → 手机端标签」整条链路
+            out.writeUtf("测试队伍");
+            out.writeUtf("这是一支测试队伍");
+            out.writeUtf("队长");
             handle(out.toByteArray(), null);
         } catch (Throwable t) {
             GTNHChat.LOG.warn("注入测试消息失败", t);

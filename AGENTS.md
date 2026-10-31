@@ -30,10 +30,12 @@ GTNHChat：面向 Minecraft 1.7.10（GTNH / Thermos）服务端的聊天格式�
 ```
 build.gradle / gradle.properties / dependencies.gradle   构建
 src/main/java/com/huaxidesu/gtnchat/
-  chat/      颜色码解析、规则匹配、组件组装
+  chat/      颜色码解析、规则匹配、组件组装；TeamInfo（ServerUtilities 队伍）、
+             WorldNames（MV alias / 家园世界 / 内置维度表）
   config/    两份 YAML 的解析与内存模型
   relay/     跨服帧编解码、去重、收发
   net/       模组网络通道
+  bridge/    交给 AEMobile（手机端）的元数据，反射调用，没装时停用
   nei/       物品链接跨服桥（反射）
   client/    成就检测与握手（仅客户端）
   command/   /gtchat

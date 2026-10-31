@@ -35,6 +35,8 @@ public final class Config {
     public static String relayChannel = "gtnchat";
     public static int relayProtocol = 1;
     public static boolean relayKeepClick = false;
+    /** 跨服消息是否额外写一条带来源的日志（控制台翻日志时好找） */
+    public static boolean relayLog = true;
 
     public static boolean achievementEnabled = true;
     public static String achievementLayout = "&e{player} &7达成了成就 &b{achievement}";
@@ -111,6 +113,7 @@ public final class Config {
             relayChannel = str(relay.get("channel"), relayChannel);
             relayProtocol = num(relay.get("protocol"), relayProtocol);
             relayKeepClick = bool(relay.get("keep-click"), relayKeepClick);
+            relayLog = bool(relay.get("log"), relayLog);
 
             Map<String, Object> ach = map(root.get("achievements"));
             achievementEnabled = bool(ach.get("enabled"), achievementEnabled);

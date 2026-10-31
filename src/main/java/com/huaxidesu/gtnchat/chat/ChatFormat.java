@@ -103,6 +103,12 @@ public final class ChatFormat {
         public String world = "";
         public String server = "";
         public String message = "";
+        /** 玩家所在团队的名字；空串表示没有团队，{team} 会渲染成空 */
+        public String team = "";
+        /** 团队简介，只给悬停用 */
+        public String teamDesc = "";
+        /** 职位（队长 / 管理员 / 成员），只给悬停用 */
+        public String teamRank = "";
         /** 是否保留点击动作。跨服消息默认不保留。 */
         public boolean keepClick = true;
         /** 只有 {@code {item}} 用得到，NEI 物品链接用组件而不是纯文本。 */
@@ -242,6 +248,9 @@ public final class ChatFormat {
     }
 
     private static void renderStyle(IChatComponent parent, Style style, Ctx ctx) {
+        // 片段里的占位符全空时（比如没有队伍的 {team}），不要留下一个空括号
+        String text = expand(style.text, ctx);
+        if (isEffectivelyEmpty(text)) return;
         ChatComponentText box = new ChatComponentText("");
         ChatStyle cs = new ChatStyle();
         if (!style.hover.isEmpty()) {
@@ -253,8 +262,20 @@ public final class ChatFormat {
             if (action != null && !value.isEmpty()) cs.setChatClickEvent(new ClickEvent(action, value));
         }
         box.setChatStyle(cs);
-        McText.append(box, expand(style.text, ctx));
+        McText.append(box, text);
         parent.appendSibling(box);
+    }
+
+    /** 去掉颜色码和括号后还剩不剩东西 */
+    private static boolean isEffectivelyEmpty(String text) {
+        if (text == null || text.isEmpty()) return true;
+        for (int i = 0; i < text.length(); i++) {
+            char c = text.charAt(i);
+            if (c == '§' || c == '&') { i++; continue; }
+            if (c == '[' || c == ']' || c == ' ' || c == ':' || c == '<' || c == '>') continue;
+            return false;
+        }
+        return true;
     }
 
     private static IChatComponent hover(List<String> lines, Ctx ctx) {
@@ -300,13 +321,17 @@ public final class ChatFormat {
     }
 
     private static boolean isBuiltin(String key) {
-        return "server".equals(key) || "world".equals(key) || "player".equals(key);
+        return "server".equals(key) || "world".equals(key) || "player".equals(key)
+                || "team".equals(key) || "teamdesc".equals(key) || "teamrank".equals(key);
     }
 
     private static String builtin(String key, Ctx ctx) {
         if ("server".equals(key)) return clean(ctx.server);
         if ("world".equals(key)) return clean(ctx.world);
         if ("player".equals(key)) return clean(ctx.player);
+        if ("team".equals(key)) return clean(ctx.team);
+        if ("teamdesc".equals(key)) return clean(ctx.teamDesc);
+        if ("teamrank".equals(key)) return clean(ctx.teamRank);
         return null;
     }
 
@@ -345,16 +370,9 @@ public final class ChatFormat {
         return s;
     }
 
+    /** 世界显示名：MV alias > config 覆盖 > 内置维度表 > 家园世界 > provider 名 */
     public static String worldName(EntityPlayerMP player) {
-        try {
-            int dim = player.worldObj.provider.dimensionId;
-            String alias = Config.worldNames.get(dim);
-            if (alias != null && !alias.isEmpty()) return alias;
-            String name = player.worldObj.provider.getDimensionName();
-            return name == null || name.isEmpty() ? String.valueOf(dim) : name;
-        } catch (Throwable t) {
-            return "";
-        }
+        return WorldNames.of(player);
     }
 
     // ---------------------------------------------------------------- 权限

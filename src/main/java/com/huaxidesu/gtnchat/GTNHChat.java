@@ -11,6 +11,8 @@ import org.apache.logging.log4j.Logger;
 
 import com.huaxidesu.gtnchat.bridge.MobileBridge;
 import com.huaxidesu.gtnchat.chat.ChatFormat;
+import com.huaxidesu.gtnchat.chat.TeamInfo;
+import com.huaxidesu.gtnchat.chat.WorldNames;
 import com.huaxidesu.gtnchat.client.ClientSetup;
 import com.huaxidesu.gtnchat.command.CommandGTNH;
 import com.huaxidesu.gtnchat.config.Config;
@@ -65,6 +67,12 @@ public class GTNHChat {
     @Mod.EventHandler
     public void serverStarting(FMLServerStartingEvent event) {
         event.registerServerCommand(new CommandGTNH());
+        // Multiverse 的 worlds.yml 相对服务端根目录，启动时定位一次
+        try {
+            WorldNames.init(event.getServer().getFile("."));
+        } catch (Throwable t) {
+            WorldNames.init(null);
+        }
     }
 
     // ------------------------------------------------------------ 事件
@@ -89,6 +97,14 @@ public class GTNHChat {
                 ctx.message = message;
                 ctx.keepClick = true;
 
+                // 队伍名放在人名前面，悬停里带简介和职位（见 style.yml 的 team 片段）
+                TeamInfo.Info team = TeamInfo.of(player);
+                if (team != null) {
+                    ctx.team = team.name;
+                    ctx.teamDesc = team.desc;
+                    ctx.teamRank = team.rank;
+                }
+
                 final IChatComponent line = ChatFormat.render(ctx, rule);
                 final String ruleName = rule.name;
                 final String world = ctx.world;
@@ -102,7 +118,7 @@ public class GTNHChat {
                     public void run() {
                         // 手机端要在广播前拿到元数据，否则只能把整行当成服务器消息
                         MobileBridge.push(line, who, world, message, Config.serverDisplay, false,
-                            MobileBridge.KIND_GAME);
+                            MobileBridge.KIND_GAME, team == null ? "" : team.name);
                         MinecraftServer.getServer().getConfigurationManager().sendChatMsg(line);
                         ChatRelay.forwardChat(player, message, ruleName);
                     }
@@ -119,6 +135,8 @@ public class GTNHChat {
         @SubscribeEvent
         public void onServerTick(TickEvent.ServerTickEvent event) {
             if (event.phase == TickEvent.Phase.END) MainThread.drain();
+            // 只 stat 一次 mtime，文件没变就什么都不做
+            if (event.phase == TickEvent.Phase.END) WorldNames.reloadIfChanged();
         }
 
         @SubscribeEvent

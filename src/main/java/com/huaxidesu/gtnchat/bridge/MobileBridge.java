@@ -32,7 +32,10 @@ public final class MobileBridge {
 
     private static boolean checked;
     private static boolean enabled;
+    /** 新签名：带队伍名 */
     private static Method accept;
+    /** 旧签名（3.4.0 之前没有队伍名），只在没探测到新方法时用 */
+    private static Method acceptLegacy;
 
     private MobileBridge() {}
 
@@ -44,9 +47,33 @@ public final class MobileBridge {
     private static synchronized void check() {
         if (checked) return;
         checked = true;
+        Class<?> hub;
         try {
-            Class<?> hub = Class.forName("dev.youtiao.aemobile.net.ChatHub");
+            hub = Class.forName("dev.youtiao.aemobile.net.ChatHub");
+        } catch (Throwable t) {
+            enabled = false;
+            GTNHChat.LOG.info("未发现 AEMobile，手机端桥接关闭");
+            return;
+        }
+        try {
             accept = hub.getMethod(
+                "acceptFormatted",
+                IChatComponent.class,
+                String.class,
+                String.class,
+                String.class,
+                String.class,
+                boolean.class,
+                int.class,
+                String.class);
+            enabled = true;
+            GTNHChat.LOG.info("已接上 AEMobile 聊天桥（含队伍名）");
+            return;
+        } catch (Throwable ignored) {
+            // 老版本 AEMobile：退回 7 参数签名
+        }
+        try {
+            acceptLegacy = hub.getMethod(
                 "acceptFormatted",
                 IChatComponent.class,
                 String.class,
@@ -56,12 +83,17 @@ public final class MobileBridge {
                 boolean.class,
                 int.class);
             enabled = true;
-            GTNHChat.LOG.info("已接上 AEMobile 聊天桥");
+            GTNHChat.LOG.info("已接上 AEMobile 聊天桥（旧版，无队伍名）");
         } catch (Throwable t) {
-            accept = null;
             enabled = false;
-            GTNHChat.LOG.info("未发现 AEMobile，手机端桥接关闭");
+            GTNHChat.LOG.info("AEMobile 版本不匹配，手机端桥接关闭");
         }
+    }
+
+    /** 不带队伍名的旧调用方式 */
+    public static void push(IChatComponent line, String player, String world, String raw,
+                            String origin, boolean remote, int kind) {
+        push(line, player, world, raw, origin, remote, kind, "");
     }
 
     /**
@@ -70,17 +102,23 @@ public final class MobileBridge {
      * @param line   即将广播的组件，必须与随后 {@code sendChatMsg} 的参数是同一个对象
      * @param player 说话的人；成就公告是达成成就的玩家，服务器广播留空
      * @param world  世界显示名，没有就传空串
-     * @param raw    玩家原始输入（未格式化、未加颜色码），用于手机端去重
+     * @param raw    玩家原始输入（未格式化、未加颜色码），用于手机端去重；成就是成就名
      * @param origin 来源服务器显示名：本服消息传本服的，跨服消息传发送端的
      * @param remote 是否是别的服务器转发过来的
      * @param kind   {@link #KIND_GAME} / {@link #KIND_SERVER} / {@link #KIND_ACHIEVEMENT}
+     * @param team   玩家所在队伍名，没有就传空串
      */
     public static void push(IChatComponent line, String player, String world, String raw,
-                            String origin, boolean remote, int kind) {
+                            String origin, boolean remote, int kind, String team) {
         check();
         if (!enabled || line == null) return;
         try {
-            accept.invoke(null, line, player, world, raw, origin, remote, kind);
+            if (accept != null) {
+                accept.invoke(null, line, player, world, raw, origin, remote, kind,
+                    team == null ? "" : team);
+            } else {
+                acceptLegacy.invoke(null, line, player, world, raw, origin, remote, kind);
+            }
         } catch (Throwable t) {
             // 桥只是旁路：出错不能让聊天本身失败
             if (Config.debug) GTNHChat.LOG.warn("手机端桥接调用失败", t);

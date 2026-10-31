@@ -24,6 +24,17 @@ world:
   hover:
     - '&7所在世界: &f{world}'
 
+# 队伍名，放在人名前面。没有队伍时整段不渲染（不会留下空括号）。
+#   {team}      队伍名
+#   {teamdesc}  队伍简介
+#   {teamrank}  职位（队长 / 管理员 / 成员）
+team:
+  text: '&7[&b{team}&7]'
+  hover:
+    - '&6队伍: &b{team}'
+    - '&6简介: &f{teamdesc}'
+    - '&6职位: &e{teamrank}'
+
 player:
   text: '&6<&a{player}&6>'
   hover:

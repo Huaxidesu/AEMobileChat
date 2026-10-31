@@ -22,9 +22,9 @@ chat:
   rules:
     admin:
       op: 1
-      layout: '&6[&e{server}&6]{world}{playerop}&r: {message}'
+      layout: '{server}{world}{team}{admin}{player}&r: {message}'
     default:
-      layout: '&6[&e{server}&6]{world}{player}&r: {message}'
+      layout: '{server}{world}{team}{player}&r: {message}'
 
 # 世界名显示。没列出的维度用维度自身的名字。
 world-names:
@@ -41,6 +41,9 @@ relay:
   # 转发过来的消息是否保留点击动作。
   # 默认关闭：点击命令在别的服务器上执行通常没有意义。
   keep-click: false
+  # 跨服消息额外写一条带来源的日志，例如「[跨服] 生存 → 主城: <Steve> 你好」。
+  # sendChatMsg 自己那条日志只有渲染后的文本，翻日志时不好确认来自哪台服。
+  log: true
 
 achievements:
   enabled: true
