@@ -28,17 +28,22 @@ world:
 #   {team}      队伍名
 #   {teamdesc}  队伍简介
 #   {teamrank}  职位（队长 / 管理员 / 成员）
+#   {teamcolor} 队伍颜色（读 ServerUtilities 里配的那个色），写 {teamcolor} 就等于 &9 这种
+# 括号和其它片段一样用金色，名字用队伍自己的颜色。
 team:
-  text: '&7[&b{team}&7]'
+  text: '&6[{teamcolor}{team}&6]'
   hover:
-    - '&6队伍: &b{team}'
+    - '&6队伍: &f{team}'
     - '&6简介: &f{teamdesc}'
     - '&6职位: &e{teamrank}'
 
+# 玩家名跟队伍同一个颜色，一眼看出是哪队的人。
 player:
-  text: '&6<&a{player}&6>'
+  text: '{teamcolor}{player}'
   hover:
-    - '&7点击私聊'
+    - '&6玩家名称: &f{player}'
+    - ''
+    - '&c点击与我聊天'
   click:
     action: suggest
     value: '/msg {player} '

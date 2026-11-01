@@ -24,7 +24,7 @@ chat:
       op: 1
       layout: '{server}{world}{team}{playerop}&f: {message}'
     default:
-      layout: '{server}{world}{team}{player}&r: {message}'
+      layout: '{server}{world}{team}{player}&f: {message}'
 
 # 世界名显示。没列出的维度用维度自身的名字。
 world-names:

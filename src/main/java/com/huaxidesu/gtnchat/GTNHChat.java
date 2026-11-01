@@ -103,6 +103,8 @@ public class GTNHChat {
                     ctx.team = team.name;
                     ctx.teamDesc = team.desc;
                     ctx.teamRank = team.rank;
+                    // 队伍名和玩家名都用 ServerUtilities 里配的队伍颜色
+                    ctx.teamColor = team.color;
                 }
 
                 final IChatComponent line = ChatFormat.render(ctx, rule);
@@ -118,7 +120,8 @@ public class GTNHChat {
                     public void run() {
                         // 手机端要在广播前拿到元数据，否则只能把整行当成服务器消息
                         MobileBridge.push(line, who, world, message, Config.serverDisplay, false,
-                            MobileBridge.KIND_GAME, team == null ? "" : team.name);
+                            MobileBridge.KIND_GAME, team == null ? "" : team.name,
+                            team == null ? "" : team.color);
                         MinecraftServer.getServer().getConfigurationManager().sendChatMsg(line);
                         ChatRelay.forwardChat(player, message, ruleName);
                     }
@@ -143,6 +146,13 @@ public class GTNHChat {
         public void onLogin(PlayerEvent.PlayerLoggedInEvent event) {
             if (!(event.player instanceof EntityPlayerMP)) return;
             ChatRelay.sendHello((EntityPlayerMP) event.player);
+        }
+
+        @SubscribeEvent
+        public void onLogout(PlayerEvent.PlayerLoggedOutEvent event) {
+            if (event.player == null) return;
+            // 同名重进（离线模式换人）不该沿用上一个人的「客户端装了本模组」状态
+            ChatRelay.clearClientMod(event.player.getCommandSenderName());
         }
     }
 }

@@ -32,13 +32,19 @@ public final class TeamInfo {
         public final String desc;
         /** 职位：队长 / 管理员 / 成员 */
         public final String rank;
+        /** 队伍颜色码字符（{@code 9} / {@code b} …），给 {@code {teamcolor}} 用 */
+        public final String color;
 
-        Info(String name, String desc, String rank) {
+        Info(String name, String desc, String rank, String color) {
             this.name = name;
             this.desc = desc;
             this.rank = rank;
+            this.color = color == null || color.isEmpty() ? DEFAULT_COLOR : color;
         }
     }
+
+    /** 取不到队伍颜色时用的码：青色，暗背景上比 ServerUtilities 默认的深蓝清楚得多 */
+    public static final String DEFAULT_COLOR = "b";
 
     private static final long TTL_MS = 5000L;
 
@@ -52,6 +58,9 @@ public final class TeamInfo {
     private static Method mGetStatus;
     private static Field fTeam;
     private static Method mStatusName;
+    /** {@code ForgeTeam.getColor()} → EnumTeamColor；{@code EnumTeamColor.getColor()} → EnumChatFormatting */
+    private static Method mGetColor;
+    private static Method mColorFormatting;
 
     private static final Map<UUID, Cached> CACHE = new ConcurrentHashMap<UUID, Cached>();
 
@@ -94,6 +103,11 @@ public final class TeamInfo {
             mGetDesc = forgeTeam.getMethod("getDesc");
             mGetStatus = forgeTeam.getMethod("getHighestStatus", forgePlayer);
             mStatusName = status.getMethod("name");
+            try {
+                mGetColor = forgeTeam.getMethod("getColor");
+            } catch (Throwable ignored) {
+                // 老版本 ServerUtilities 没有队伍颜色：用默认色
+            }
             available = true;
             GTNHChat.LOG.info("已接上 ServerUtilities 团队");
         } catch (Throwable t) {
@@ -118,7 +132,8 @@ public final class TeamInfo {
             String title = plain(mGetTitle.invoke(team));
             Object desc = mGetDesc.invoke(team);
             Object status = mGetStatus.invoke(team, fp);
-            return "hasTeam=" + has + " title=[" + title + "] desc=[" + desc + "] status=" + status;
+            return "hasTeam=" + has + " title=[" + title + "] desc=[" + desc + "] status=" + status
+                + " color=[" + teamColor(team) + "] raw=[" + rawColor(team) + "]";
         } catch (Throwable t) {
             return "error=" + t;
         }
@@ -181,23 +196,80 @@ public final class TeamInfo {
                 }
             } catch (Throwable ignored) {}
 
-            return new Info(name, desc, rank);
+            return new Info(name, desc, rank, teamColor(team));
         } catch (Throwable t) {
             if (Config.debug) GTNHChat.LOG.warn("读取团队信息失败", t);
             return null;
         }
     }
 
+    /**
+     * 队伍在 ServerUtilities 里配的颜色，返回 {@code §} 后面的那个码字符（{@code 9} / {@code d} …）。
+     *
+     * <p>链子是 {@code ForgeTeam.getColor() → EnumTeamColor}，再取
+     * {@code EnumTeamColor.getEnumChatFormatting()}（**不是** {@code getColor()}，
+     * 那个返回的是 {@code Color4I} 的 RGB 对象，转不出码字符 —— 2026-10-31 踩过，
+     * 表现是「改了队伍颜色但聊天里一直是默认青色」）。
+     */
+    private static String teamColor(Object team) {
+        if (mGetColor == null) return DEFAULT_COLOR;
+        try {
+            Object enumTeamColor = mGetColor.invoke(team);
+            if (enumTeamColor == null) return DEFAULT_COLOR;
+            if (mColorFormatting == null) {
+                mColorFormatting = enumTeamColor.getClass().getMethod("getEnumChatFormatting");
+            }
+            Object formatting = mColorFormatting.invoke(enumTeamColor);
+            if (formatting == null) return DEFAULT_COLOR;
+            // EnumChatFormatting.toString() 有的版本给 "d"，有的给 "§d"，统一成单字符
+            String code = String.valueOf(formatting).trim();
+            if (code.startsWith("\u00a7")) code = code.substring(1);
+            if (code.length() != 1) return DEFAULT_COLOR;
+            char c = Character.toLowerCase(code.charAt(0));
+            return "0123456789abcdef".indexOf(c) >= 0 ? String.valueOf(c) : DEFAULT_COLOR;
+        } catch (Throwable t) {
+            return DEFAULT_COLOR;
+        }
+    }
+
+    /** 调试用：把 {@code EnumTeamColor} 和它给的格式枚举原样打出来，确认颜色码长什么样 */
+    private static String rawColor(Object team) {
+        if (mGetColor == null) return "no-getColor";
+        try {
+            Object enumTeamColor = mGetColor.invoke(team);
+            if (enumTeamColor == null) return "null";
+            Object formatting = enumTeamColor.getClass().getMethod("getEnumChatFormatting").invoke(enumTeamColor);
+            return String.valueOf(enumTeamColor) + "/" + String.valueOf(formatting);
+        } catch (Throwable t) {
+            return "error=" + t;
+        }
+    }
+
     /** IChatComponent → 纯文本（团队名可以带颜色码，这里去掉） */
+    /**
+     * 取组件的纯文本。
+     *
+     * <p><b>必须试 SRG 名</b>：{@code ForgeTeam.getTitle()} 返回的是 {@code IChatComponent}，
+     * reobf 之后 {@code getUnformattedText()} 在运行时叫 {@code func_150260_c}，
+     * 只按 MCP 名反射永远抛 {@code NoSuchMethodException} —— 表现就是「队伍明明有名字，
+     * 却一直走描述兜底」（2026-10-31 踩过：标题「华溪岛」显示成描述「温馨的小家」）。
+     */
     private static String plain(Object component) {
         if (component == null) return "";
-        try {
-            Method m = component.getClass().getMethod("getUnformattedText");
-            Object v = m.invoke(component);
-            String s = v == null ? "" : String.valueOf(v);
-            return s.replace("&", "").replace("\u00a7", "").trim();
-        } catch (Throwable t) {
-            return "";
+        if (component instanceof String) return clean((String) component);
+        for (String name : new String[] { "getUnformattedText", "func_150260_c" }) {
+            try {
+                Method m = component.getClass().getMethod(name);
+                Object v = m.invoke(component);
+                if (v != null) return clean(String.valueOf(v));
+            } catch (Throwable ignored) {
+                // 换下一个名字
+            }
         }
+        return "";
+    }
+
+    private static String clean(String s) {
+        return s == null ? "" : s.replace("&", "").replace("\u00a7", "").trim();
     }
 }

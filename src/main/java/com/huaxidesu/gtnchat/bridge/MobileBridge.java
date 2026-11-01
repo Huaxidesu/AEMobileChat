@@ -25,6 +25,8 @@ public final class MobileBridge {
 
     /** 玩家公屏（与 AEMobile 的 KIND_GAME 对齐） */
     public static final int KIND_GAME = 0;
+    /** 手机端 App 发的消息（与 AEMobile 的 KIND_APP 对齐） */
+    public static final int KIND_APP = 1;
     /** 服务器广播 */
     public static final int KIND_SERVER = 4;
     /** 成就公告 */
@@ -32,9 +34,11 @@ public final class MobileBridge {
 
     private static boolean checked;
     private static boolean enabled;
-    /** 新签名：带队伍名 */
+    /** 最新签名：带队伍名 + 队伍颜色 */
+    private static Method acceptNew;
+    /** 上一版签名：带队伍名、没颜色 */
     private static Method accept;
-    /** 旧签名（3.4.0 之前没有队伍名），只在没探测到新方法时用 */
+    /** 3.4.0 之前的签名，连队伍名都没有 */
     private static Method acceptLegacy;
 
     private MobileBridge() {}
@@ -54,6 +58,24 @@ public final class MobileBridge {
             enabled = false;
             GTNHChat.LOG.info("未发现 AEMobile，手机端桥接关闭");
             return;
+        }
+        try {
+            acceptNew = hub.getMethod(
+                "acceptFormatted",
+                IChatComponent.class,
+                String.class,
+                String.class,
+                String.class,
+                String.class,
+                boolean.class,
+                int.class,
+                String.class,
+                String.class);
+            enabled = true;
+            GTNHChat.LOG.info("已接上 AEMobile 聊天桥（含队伍名与队伍颜色）");
+            return;
+        } catch (Throwable ignored) {
+            // 老版本 AEMobile：退回 8 参数签名
         }
         try {
             accept = hub.getMethod(
@@ -90,38 +112,48 @@ public final class MobileBridge {
         }
     }
 
-    /** 不带队伍名的旧调用方式 */
+    /** 不带队伍信息的旧调用方式（成就、物品链接等） */
     public static void push(IChatComponent line, String player, String world, String raw,
                             String origin, boolean remote, int kind) {
-        push(line, player, world, raw, origin, remote, kind, "");
+        push(line, player, world, raw, origin, remote, kind, "", "");
+    }
+
+    /** 带队伍名、没有颜色的调用方式 */
+    public static void push(IChatComponent line, String player, String world, String raw,
+                            String origin, boolean remote, int kind, String team) {
+        push(line, player, world, raw, origin, remote, kind, team, "");
     }
 
     /**
      * 广播前调用，把这条消息的元数据交给手机端。
      *
-     * @param line   即将广播的组件，必须与随后 {@code sendChatMsg} 的参数是同一个对象
-     * @param player 说话的人；成就公告是达成成就的玩家，服务器广播留空
-     * @param world  世界显示名，没有就传空串
-     * @param raw    玩家原始输入（未格式化、未加颜色码），用于手机端去重；成就是成就名
-     * @param origin 来源服务器显示名：本服消息传本服的，跨服消息传发送端的
-     * @param remote 是否是别的服务器转发过来的
-     * @param kind   {@link #KIND_GAME} / {@link #KIND_SERVER} / {@link #KIND_ACHIEVEMENT}
-     * @param team   玩家所在队伍名，没有就传空串
+     * @param line      即将广播的组件，必须与随后 {@code sendChatMsg} 的参数是同一个对象
+     * @param player    说话的人；成就公告是达成成就的玩家，服务器广播留空
+     * @param world     世界显示名，没有就传空串
+     * @param raw       玩家原始输入（未格式化、未加颜色码），用于手机端去重；成就是成就名
+     * @param origin    来源服务器显示名：本服消息传本服的，跨服消息传发送端的
+     * @param remote    是否是别的服务器转发过来的
+     * @param kind      {@link #KIND_GAME} / {@link #KIND_SERVER} / {@link #KIND_ACHIEVEMENT}
+     * @param team      玩家所在队伍名，没有就传空串
+     * @param teamColor 队伍颜色码字符（{@code d} / {@code b} …），手机端拿它给名字上色
      */
     public static void push(IChatComponent line, String player, String world, String raw,
-                            String origin, boolean remote, int kind, String team) {
+                            String origin, boolean remote, int kind, String team, String teamColor) {
         check();
         if (!enabled || line == null) return;
+        String t = team == null ? "" : team;
+        String c = teamColor == null ? "" : teamColor;
         try {
-            if (accept != null) {
-                accept.invoke(null, line, player, world, raw, origin, remote, kind,
-                    team == null ? "" : team);
+            if (acceptNew != null) {
+                acceptNew.invoke(null, line, player, world, raw, origin, remote, kind, t, c);
+            } else if (accept != null) {
+                accept.invoke(null, line, player, world, raw, origin, remote, kind, t);
             } else {
                 acceptLegacy.invoke(null, line, player, world, raw, origin, remote, kind);
             }
-        } catch (Throwable t) {
+        } catch (Throwable e) {
             // 桥只是旁路：出错不能让聊天本身失败
-            if (Config.debug) GTNHChat.LOG.warn("手机端桥接调用失败", t);
+            if (Config.debug) GTNHChat.LOG.warn("手机端桥接调用失败", e);
         }
     }
 }

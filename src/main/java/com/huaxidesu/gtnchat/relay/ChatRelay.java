@@ -14,6 +14,8 @@ import net.minecraft.network.play.server.S3FPacketCustomPayload;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.stats.Achievement;
 import net.minecraft.stats.AchievementList;
+import net.minecraft.util.ChatComponentText;
+import net.minecraft.util.EnumChatFormatting;
 import net.minecraft.util.IChatComponent;
 
 import com.huaxidesu.gtnchat.GTNHChat;
@@ -43,6 +45,16 @@ public final class ChatRelay {
     public static final byte TYPE_NEI = 3;
     public static final byte TYPE_HELLO = 4;
     public static final byte TYPE_REPORT = 5;
+    /** 手机端（AEMobile App）发的聊天：它不走 {@code ServerChatEvent}，要单独一帧 */
+    public static final byte TYPE_APP = 6;
+    /**
+     * 客户端收到握手后的回执：证明这个玩家的客户端装了本模组。
+     *
+     * <p>服务端本来只知道「有人上报过成就」，那要等玩家真的拿到成就才知道。
+     * 有了这条回执，AEMobile 才能判断「这台客户端能不能自己播成就」——
+     * 不能的话由它自己发，否则手机端一条成就都收不到（客户端没装本模组时就是这样）。
+     */
+    public static final byte TYPE_CLIENT_READY = 7;
 
     private static final byte[] MAGIC = { 'G', 'T', 'C', '1' };
     private static final int MAX_FRAME = 30000;
@@ -59,6 +71,8 @@ public final class ChatRelay {
     };
 
     private static final Map<String, Long> LAST_REPORT = new HashMap<String, Long>();
+    /** 玩家名 → 收到客户端回执的时间。只在收到回执时写，断开不清（重进会再回执一次）。 */
+    private static final Map<String, Long> CLIENT_MOD = new HashMap<String, Long>();
 
     private ChatRelay() {}
 
@@ -78,9 +92,34 @@ public final class ChatRelay {
             out.writeUtf(team == null ? "" : team.name);
             out.writeUtf(team == null ? "" : team.desc);
             out.writeUtf(team == null ? "" : team.rank);
+            // 队伍颜色是最后加的（1.1.0）：老接收端读到 EOF 就当没有，不会解析失败
+            out.writeUtf(team == null ? "" : team.color);
             send(out, sender);
         } catch (Throwable t) {
             GTNHChat.LOG.warn("跨服聊天发送失败", t);
+        }
+    }
+
+    /**
+     * 把手机端（AEMobile App）发的一条聊天发给其它服务器。
+     *
+     * <p>手机端的消息由 AEMobile 自己广播，**不经过 {@code ServerChatEvent}**，
+     * 所以 {@link #forwardChat} 收不到它 —— 群组服里手机端说的话只有它连的那台子服能看到。
+     * AEMobile 广播后会反射调用本方法补上（见 AEMobile 的 {@code net/GtnChatBridge}）。
+     *
+     * <p>必须在主线程调用。没有在线玩家可以当载体时不转发：代理的 {@code Forward} 通道
+     * 要靠一条玩家连接才写得出去。
+     */
+    public static void forwardAppChat(String name, String text) {
+        if (!Config.relayEnabled) return;
+        if (name == null || name.isEmpty() || text == null || text.isEmpty()) return;
+        try {
+            Out out = new Out(TYPE_APP);
+            out.writeUtf(name);
+            out.writeUtf(text);
+            send(out, null);
+        } catch (Throwable t) {
+            GTNHChat.LOG.warn("跨服手机端聊天发送失败", t);
         }
     }
 
@@ -171,6 +210,10 @@ public final class ChatRelay {
                 handleReport(in, sender);
                 return;
             }
+            if (type == TYPE_CLIENT_READY) {
+                markClientMod(sender);
+                return;
+            }
             if (type == TYPE_HELLO) return;
 
             String originId = in.readUTF();
@@ -191,6 +234,9 @@ public final class ChatRelay {
                 case TYPE_NEI:
                     handleNei(in, originDisplay);
                     break;
+                case TYPE_APP:
+                    handleApp(in, originDisplay);
+                    break;
                 default:
                     break;
             }
@@ -206,16 +252,20 @@ public final class ChatRelay {
         final String ruleName = in.readUTF();
         // 团队三项是后加的：老版本发的帧到这就结束了，读不到就当没有。
         // 不用 available() 判断 —— 在 Thermos 上它不可靠，会一直返回 0。
-        String t0 = "", t1 = "", t2 = "";
+        String t0 = "", t1 = "", t2 = "", t3 = "";
         try {
             t0 = in.readUTF();
             t1 = in.readUTF();
             t2 = in.readUTF();
+            t3 = in.readUTF();
         } catch (java.io.EOFException ignored) {
         }
         final String team = t0;
         final String teamDesc = t1;
         final String teamRank = t2;
+        // 队伍颜色（1.1.0）：不传的话手机端那条消息的名字会从队伍色掉回白色，
+        // 和本服聊天的样子对不上 —— 跨服消息最容易看出这个不一致
+        final String teamColor = t3;
 
         // 控制台留一条带来源的记录：sendChatMsg 那条只有渲染后的文本，
         // 服主翻日志时不好确认是从哪台服过来的
@@ -239,7 +289,8 @@ public final class ChatRelay {
                 ctx.teamRank = teamRank;
                 IChatComponent line = ChatFormat.render(ctx, rule(ruleName));
                 // 手机端据此把消息归到玩家气泡，并标注来自哪台服务器
-                MobileBridge.push(line, sender, world, message, originDisplay, true, MobileBridge.KIND_GAME, team);
+                MobileBridge.push(line, sender, world, message, originDisplay, true, MobileBridge.KIND_GAME,
+                    team, teamColor);
                 MinecraftServer.getServer().getConfigurationManager().sendChatMsg(line);
             }
         });
@@ -261,6 +312,50 @@ public final class ChatRelay {
                 MinecraftServer.getServer().getConfigurationManager().sendChatMsg(line);
             }
         });
+    }
+
+    /**
+     * 接收别的子服转发过来的手机端聊天。
+     *
+     * <p>游戏内渲染成 {@code [来源服][AEMobile][名字] 正文}，与 AEMobile 在本服的样式一致，
+     * 这样服主一眼能看出这条不是游戏里打的字。手机端只收正文：组件里那些前缀
+     * 手机端会自己拼，重复传过去会显示成「名字: [天空树][AEMobile][名字] 正文」。
+     */
+    private static void handleApp(DataInputStream in, String originDisplay) throws Exception {
+        final String name = in.readUTF();
+        final String text = in.readUTF();
+        if (Config.relayLog) {
+            GTNHChat.LOG.info("[跨服] " + originDisplay + " → " + Config.serverDisplay
+                + ": <" + name + ">(手机) " + ChatFormat.sanitize(text));
+        }
+        MainThread.submit(new Runnable() {
+
+            @Override
+            public void run() {
+                IChatComponent line = renderAppLine(originDisplay, name, text);
+                MobileBridge.push(line, name, "", text, originDisplay, true, MobileBridge.KIND_APP, "");
+                MinecraftServer.getServer().getConfigurationManager().sendChatMsg(line);
+            }
+        });
+    }
+
+    /** 手机端消息在别的服上的样子，颜色与 AEMobile 本服广播保持一致 */
+    private static IChatComponent renderAppLine(String originDisplay, String name, String text) {
+        ChatComponentText head = new ChatComponentText("[" + originDisplay + "]");
+        head.getChatStyle().setColor(EnumChatFormatting.GOLD);
+
+        ChatComponentText tag = new ChatComponentText("[AEMobile]");
+        tag.getChatStyle().setColor(EnumChatFormatting.GRAY);
+        head.appendSibling(tag);
+
+        ChatComponentText who = new ChatComponentText("[" + name + "] ");
+        who.getChatStyle().setColor(EnumChatFormatting.AQUA);
+        head.appendSibling(who);
+
+        ChatComponentText body = new ChatComponentText(ChatFormat.sanitize(text));
+        body.getChatStyle().setColor(EnumChatFormatting.WHITE);
+        head.appendSibling(body);
+        return head;
     }
 
     private static void handleNei(DataInputStream in, String originDisplay) throws Exception {
@@ -322,6 +417,42 @@ public final class ChatRelay {
         return statId.replaceFirst("^achievement\\.", "");
     }
 
+    // ------------------------------------------------------------ 客户端是否装了本模组
+
+    /** 收到客户端回执：这个玩家的客户端装了本模组，成就公告由客户端上报驱动。 */
+    private static void markClientMod(EntityPlayerMP sender) {
+        if (sender == null) return;
+        synchronized (CLIENT_MOD) {
+            CLIENT_MOD.put(sender.getCommandSenderName(), System.currentTimeMillis());
+        }
+        if (Config.debug) GTNHChat.LOG.info("客户端回执：" + sender.getCommandSenderName() + " 装了 GTNHChat");
+    }
+
+    /** 玩家退出时清掉，避免同名重进（离线模式换人）时沿用上一个人的状态 */
+    public static void clearClientMod(String player) {
+        if (player == null) return;
+        synchronized (CLIENT_MOD) {
+            CLIENT_MOD.remove(player);
+        }
+    }
+
+    /**
+     * 这个玩家的客户端到底装没装本模组（成就公告靠客户端上报，只有装了才播得出来）。
+     *
+     * <p>给 AEMobile 反射调用，决定本地成就由谁发：
+     * <ul>
+     *   <li>{@code 1} —— 客户端装了，本模组会播，手机端让路；</li>
+     *   <li>{@code 0} —— 客户端没装（或压根没回执），手机端自己发；</li>
+     *   <li>{@code -1} —— 不知道：老版本本模组没有回执机制，保持「让路」的老行为。</li>
+     * </ul>
+     */
+    public static int clientModPresent(String player) {
+        if (player == null || player.isEmpty()) return -1;
+        synchronized (CLIENT_MOD) {
+            return CLIENT_MOD.containsKey(player) ? 1 : 0;
+        }
+    }
+
     private static Rule rule(String name) {
         for (Rule r : Config.rules) {
             if (r.name.equals(name)) return r;
@@ -349,8 +480,23 @@ public final class ChatRelay {
         }
     }
 
-    // ------------------------------------------------------------------ 去重
+    /**
+     * 测试用：伪造一条「别的子服的手机端消息」，走完整的接收路径
+     * （渲染 → 交给手机端 → 广播）。本机只有一台后端，没法真跑两台来验证
+     * {@link #handleApp} 的渲染与来源标签。
+     */
+    public static void debugInjectApp(String originId, String originDisplay, String name, String text) {
+        try {
+            Out out = new Out(TYPE_APP, originId, originDisplay);
+            out.writeUtf(name);
+            out.writeUtf(text);
+            handle(out.toByteArray(), null);
+        } catch (Throwable t) {
+            GTNHChat.LOG.warn("注入手机端测试消息失败", t);
+        }
+    }
 
+    // ------------------------------------------------------------------ 去重
     private static synchronized boolean alreadySeen(long id) {
         return SEEN.containsKey(id);
     }

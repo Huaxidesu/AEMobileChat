@@ -69,7 +69,9 @@ public class CommandGTNH implements ICommand {
             reply(sender, "跨服转发: " + (Config.relayEnabled ? "开" : "关") + "，通道 " + Config.relayChannel + "，协议 " + Config.relayProtocol);
             reply(sender, "成就公告: " + (Config.achievementEnabled ? "开" : "关")
                 + "，NEI 桥: " + (NeiLink.available() ? (NeiLink.hookApplied() ? "可用（已注入）" : "可用（未注入）") : "不可用"));
-            reply(sender, "手机端桥: " + (MobileBridge.enabled() ? "已接上" : "未发现 AEMobile"));
+            reply(sender, "手机端桥: " + (MobileBridge.enabled()
+                ? "已接上 AEMobile，能力 " + mobileCaps()
+                : "未发现 AEMobile（手机端相关功能全部关闭，本模组独立可用）"));
             return;
         }
         if ("test".equals(sub)) {
@@ -130,6 +132,15 @@ public class CommandGTNH implements ICommand {
             reply(sender, "NEI 桥: " + (NeiLink.available() ? (NeiLink.hookApplied() ? "可用（已注入）" : "可用（未注入）") : "未检测到 NEI"));
             return;
         }
+        if ("app".equals(kind)) {
+            // 本机只有一台后端，跨服接收端只能靠伪造一帧来验证
+            String name = args.length > 2 ? args[2] : "Tester";
+            String text = args.length > 3 ? join(args, 3) : "手机端跨服测试";
+            ChatRelay.debugInjectApp("test-origin", "测试服", name, text);
+            reply(sender, "已按「测试服 → " + Config.serverDisplay + "」注入手机端消息: "
+                + name + ": " + text);
+            return;
+        }
         if ("team".equals(kind)) {
             EntityPlayerMP target = args.length > 2
                 ? MinecraftServer.getServer().getConfigurationManager().func_152612_a(join(args, 2))
@@ -179,6 +190,15 @@ public class CommandGTNH implements ICommand {
             return;
         }
         reply(sender, "未知的测试类型: " + kind);
+    }
+
+    /** 手机端实际能拿到的能力，和 AEMobile 握手下发的 `caps` 是同一套口径 */
+    private static String mobileCaps() {
+        StringBuilder sb = new StringBuilder("chat");
+        if (TeamInfo.available()) sb.append("/team");
+        sb.append("/world");
+        if (Config.relayEnabled) sb.append("/relay");
+        return sb.toString();
     }
 
     private static Rule findRule(String name) {

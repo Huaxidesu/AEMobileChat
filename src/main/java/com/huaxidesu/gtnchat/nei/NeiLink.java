@@ -159,7 +159,7 @@ public final class NeiLink {
         IChatComponent fallback = new ChatComponentText("[物品]");
         try {
             if (!payload.hasKey("item")) return fallback;
-            ItemStack stack = ItemStack.loadItemStackFromNBT(payload.getCompoundTag("item"));
+            ItemStack stack = stackFromPayload(payload.getCompoundTag("item"));
             if (stack == null) return fallback;
 
             ChatComponentText box = new ChatComponentText("[" + stack.getDisplayName() + "]");
@@ -171,6 +171,26 @@ public final class NeiLink {
         } catch (Throwable t) {
             return fallback;
         }
+    }
+
+    /**
+     * 从 payload 的 {@code item} 标签还原物品。
+     *
+     * <p><b>不能用 {@code ItemStack.loadItemStackFromNBT}</b>：NEI 的 payload 是 StackInfo 格式
+     * （{@code strId / Count / Damage / tag}），原版读的是数字 {@code id}，解析出来是 null，
+     * 跨服物品链接会退化成 {@code [物品]}。优先走 NEI 自己的 {@code StackInfo.loadFromNBT}，
+     * 老格式再退回原版解析。
+     */
+    private static ItemStack stackFromPayload(NBTTagCompound itemTag) {
+        if (itemTag == null) return null;
+        try {
+            Class<?> stackInfo = Class.forName("codechicken.nei.recipe.StackInfo");
+            Object v = stackInfo.getMethod("loadFromNBT", NBTTagCompound.class).invoke(null, itemTag);
+            if (v instanceof ItemStack) return (ItemStack) v;
+        } catch (Throwable ignored) {
+            // 没装 NEI 或版本不同：退回原版解析
+        }
+        return ItemStack.loadItemStackFromNBT(itemTag);
     }
 
     private static IChatComponent tooltip(ItemStack stack) {

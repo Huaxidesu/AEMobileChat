@@ -110,6 +110,8 @@ public final class ChatFormat {
         public String teamDesc = "";
         /** 职位（队长 / 管理员 / 成员），只给悬停用 */
         public String teamRank = "";
+        /** 队伍颜色码字符（{@code 9} / {@code b} …），给样式里的 {@code {teamcolor}} 用 */
+        public String teamColor = TeamInfo.DEFAULT_COLOR;
         /** 是否保留点击动作。跨服消息默认不保留。 */
         public boolean keepClick = true;
         /** 只有 {@code {item}} 用得到，NEI 物品链接用组件而不是纯文本。 */
@@ -339,7 +341,8 @@ public final class ChatFormat {
 
     private static boolean isBuiltin(String key) {
         return "server".equals(key) || "world".equals(key) || "player".equals(key)
-                || "team".equals(key) || "teamdesc".equals(key) || "teamrank".equals(key);
+                || "team".equals(key) || "teamdesc".equals(key) || "teamrank".equals(key)
+                || "teamcolor".equals(key);
     }
 
     private static String builtin(String key, Ctx ctx) {
@@ -349,6 +352,12 @@ public final class ChatFormat {
         if ("team".equals(key)) return clean(ctx.team);
         if ("teamdesc".equals(key)) return clean(ctx.teamDesc);
         if ("teamrank".equals(key)) return clean(ctx.teamRank);
+        // 队伍颜色：ServerUtilities 里配的那个色，渲染成 &9 这种形式交给后面的颜色解析。
+        // 没有队伍时给默认色，免得样式里的 &{teamcolor} 变成字面量。
+        if ("teamcolor".equals(key)) {
+            String c = ctx.teamColor == null || ctx.teamColor.isEmpty() ? TeamInfo.DEFAULT_COLOR : ctx.teamColor;
+            return "&" + c;
+        }
         return null;
     }
 
