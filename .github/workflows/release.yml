@@ -1,0 +1,48 @@
+# 打 tag 就构建并发布到 GitHub Release。
+#
+# 版本号来自 git tag（build.gradle 用 git-version 插件），fetch-depth 必须是 0。
+# 构建要 Java 8：模组是 1.7.10 / Forge 10.13，Java 17 编译会在 mixin 注解处理阶段炸。
+name: Release
+
+on:
+  push:
+    tags:
+      - '*'
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Set up JDK 8
+        uses: actions/setup-java@v4
+        with:
+          java-version: '8'
+          distribution: 'temurin'
+          cache: gradle
+
+      - name: Grant execute permission for gradlew
+        run: chmod +x gradlew
+
+      - name: Build
+        run: ./gradlew build -x test --no-daemon
+
+      - name: Collect jars
+        run: |
+          mkdir -p dist
+          cp build/libs/*.jar dist/
+          ls -lh dist
+
+      - name: Release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: dist/*.jar
+          generate_release_notes: true
+          fail_on_unmatched_files: true

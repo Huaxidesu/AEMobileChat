@@ -26,6 +26,11 @@
 | 客户端 | 可选，装了才有成就公告 |
 | 软依赖 | NEI（物品链接桥）、BetterQuesting（任务分享） |
 
+## 下载
+
+打包好的 jar 挂在 [Releases](../../releases) 里：推一个 tag 时由 GitHub Actions 构建并附上产物，
+`gtnchat-1.7.10-<版本>.jar` 就是放进服务端 `mods/` 的那一个。想自己编也行，见上。
+
 ## 构建
 
 ```bash
