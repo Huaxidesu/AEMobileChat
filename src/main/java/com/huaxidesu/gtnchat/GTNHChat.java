@@ -11,6 +11,7 @@ import org.apache.logging.log4j.Logger;
 
 import com.huaxidesu.gtnchat.bridge.MobileBridge;
 import com.huaxidesu.gtnchat.chat.ChatFormat;
+import com.huaxidesu.gtnchat.chat.ChatHeads;
 import com.huaxidesu.gtnchat.chat.TeamInfo;
 import com.huaxidesu.gtnchat.chat.WorldNames;
 import com.huaxidesu.gtnchat.client.ClientSetup;
@@ -153,6 +154,8 @@ public class GTNHChat {
             if (event.player == null) return;
             // 同名重进（离线模式换人）不该沿用上一个人的「客户端装了本模组」状态
             ChatRelay.clearClientMod(event.player.getCommandSenderName());
+            // 客户端能力同理：那人走了，头像留边的判定要跟着变
+            ChatHeads.clear(event.player.getCommandSenderName());
         }
     }
 }

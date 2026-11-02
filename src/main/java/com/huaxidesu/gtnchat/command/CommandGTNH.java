@@ -17,6 +17,7 @@ import net.minecraft.util.IChatComponent;
 import com.huaxidesu.gtnchat.Tags;
 import com.huaxidesu.gtnchat.bridge.MobileBridge;
 import com.huaxidesu.gtnchat.chat.ChatFormat;
+import com.huaxidesu.gtnchat.chat.ChatHeads;
 import com.huaxidesu.gtnchat.chat.TeamInfo;
 import com.huaxidesu.gtnchat.config.Config;
 import com.huaxidesu.gtnchat.config.Rule;
@@ -72,6 +73,7 @@ public class CommandGTNH implements ICommand {
             reply(sender, "手机端桥: " + (MobileBridge.enabled()
                 ? "已接上 AEMobile，能力 " + mobileCaps()
                 : "未发现 AEMobile（手机端相关功能全部关闭，本模组独立可用）"));
+            reply(sender, "聊天头像兼容: " + ChatHeads.describe());
             return;
         }
         if ("test".equals(sub)) {

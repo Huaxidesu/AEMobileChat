@@ -169,60 +169,78 @@ public final class ChatFormat {
     }
 
     public static IChatComponent render(Ctx ctx, String layout) {
-        Layout compiled = LAYOUTS.get(layout == null ? "" : layout);
+        String key = layout == null ? "" : layout;
+        Layout compiled = LAYOUTS.get(key);
         if (compiled == null) {
-            compiled = compile(layout == null ? "" : layout);
-            LAYOUTS.put(layout == null ? "" : layout, compiled);
+            compiled = compile(key);
+            LAYOUTS.put(key, compiled);
         }
+        return renderTokens(compiled.tokens, ctx);
+    }
+
+    /** 基准测试用：跳过布局缓存，每次都重新编译。 */
+    public static IChatComponent renderUncached(Ctx ctx, String layout) {
+        return renderTokens(compile(layout == null ? "" : layout).tokens, ctx);
+    }
+
+    /**
+     * 按编译好的片段拼组件。
+     *
+     * <p>名字要不要留边（{@link ChatHeads}）在这里决定，而不是在编译期：客户端上下线会改变结论，
+     * 布局缓存不能跟着作废。已经输出了可见文字时名字才不会落在行首 —— 落在行首的头像本来就贴边，
+     * 不需要再补空格。
+     */
+    private static IChatComponent renderTokens(Token[] tokens, Ctx ctx) {
+        boolean heads = ChatHeads.active();
+        boolean anyVisible = false;
         ChatComponentText root = new ChatComponentText("");
-        for (Token token : compiled.tokens) {
+        for (Token token : tokens) {
             switch (token.kind) {
                 case T_LITERAL:
                     McText.append(root, token.text);
+                    if (hasVisible(token.text)) anyVisible = true;
                     break;
                 case T_MESSAGE:
                     McText.append(root, ctx.message);
+                    if (hasVisible(ctx.message)) anyVisible = true;
                     break;
                 case T_ITEM:
-                    if (ctx.item != null) root.appendSibling(ctx.item);
+                    if (ctx.item != null) {
+                        root.appendSibling(ctx.item);
+                        anyVisible = true;
+                    }
                     break;
                 case T_STYLE:
-                    renderStyle(root, token.style, ctx);
+                    if (renderStyle(root, token.style, ctx, heads && anyVisible)) anyVisible = true;
                     break;
                 default: {
                     String value = builtin(token.text, ctx);
-                    McText.append(root, value == null ? "{" + token.text + "}" : value);
+                    if (value == null) {
+                        McText.append(root, "{" + token.text + "}");
+                        anyVisible = true;
+                        break;
+                    }
+                    if (heads && anyVisible && "player".equals(token.text)) value = ChatHeads.withMargin(value);
+                    McText.append(root, value);
+                    if (hasVisible(value)) anyVisible = true;
                 }
             }
         }
         return root;
     }
 
-    /** 基准测试用：跳过布局缓存，每次都重新编译。 */
-    public static IChatComponent renderUncached(Ctx ctx, String layout) {
-        String text = layout == null ? "" : layout;
-        ChatComponentText root = new ChatComponentText("");
-        for (Token token : compile(text).tokens) {
-            switch (token.kind) {
-                case T_LITERAL:
-                    McText.append(root, token.text);
-                    break;
-                case T_MESSAGE:
-                    McText.append(root, ctx.message);
-                    break;
-                case T_ITEM:
-                    if (ctx.item != null) root.appendSibling(ctx.item);
-                    break;
-                case T_STYLE:
-                    renderStyle(root, token.style, ctx);
-                    break;
-                default: {
-                    String value = builtin(token.text, ctx);
-                    McText.append(root, value == null ? "{" + token.text + "}" : value);
-                }
+    /** 这段文本里除颜色码外还有没有字符（空格也算：它一样会把后面的内容推离行首）。 */
+    private static boolean hasVisible(String text) {
+        if (text == null) return false;
+        for (int i = 0; i < text.length(); i++) {
+            char c = text.charAt(i);
+            if ((c == '&' || c == '\u00a7') && i + 1 < text.length() && McText.isCode(text.charAt(i + 1))) {
+                i++;
+                continue;
             }
+            return true;
         }
-        return root;
+        return false;
     }
 
     /** 把布局切成片段：字面量、占位符、样式引用。只在配置变化后做一次。 */
@@ -266,10 +284,17 @@ public final class ChatFormat {
         literal.setLength(0);
     }
 
-    private static void renderStyle(IChatComponent parent, Style style, Ctx ctx) {
+    /**
+     * 渲染一个样式片段。
+     *
+     * @param padPlayer 片段里的 {@code {player}} 要不要留边（见 {@link ChatHeads}）；
+     *                  悬停和点击值永远不留 —— 那里面是命令，空格会把命令打断
+     * @return 有没有真的输出内容
+     */
+    private static boolean renderStyle(IChatComponent parent, Style style, Ctx ctx, boolean padPlayer) {
         // 片段里的占位符全空时（比如没有队伍的 {team}），不要留下一个空括号
-        String text = expand(style.text, ctx);
-        if (isEffectivelyEmpty(text)) return;
+        String text = expand(style.text, ctx, padPlayer);
+        if (isEffectivelyEmpty(text)) return false;
         ChatComponentText box = new ChatComponentText("");
         ChatStyle cs = new ChatStyle();
         if (!style.hover.isEmpty()) {
@@ -277,12 +302,13 @@ public final class ChatFormat {
         }
         if (!style.clickAction.isEmpty() && ctx.keepClick) {
             ClickEvent.Action action = clickAction(style.clickAction);
-            String value = expand(style.clickValue, ctx);
+            String value = expand(style.clickValue, ctx, false);
             if (action != null && !value.isEmpty()) cs.setChatClickEvent(new ClickEvent(action, value));
         }
         box.setChatStyle(cs);
         McText.append(box, text);
         parent.appendSibling(box);
+        return true;
     }
 
     /** 去掉颜色码和括号后还剩不剩东西 */
@@ -301,7 +327,7 @@ public final class ChatFormat {
         ChatComponentText root = new ChatComponentText("");
         for (int i = 0; i < lines.size(); i++) {
             if (i > 0) root.appendSibling(new ChatComponentText("\n"));
-            McText.append(root, expand(lines.get(i), ctx));
+            McText.append(root, expand(lines.get(i), ctx, false));
         }
         return root;
     }
@@ -315,7 +341,7 @@ public final class ChatFormat {
     }
 
     /** 片段内部只展开内置占位符；不再递归查样式表，避免配置写错时无限展开。 */
-    private static String expand(String text, Ctx ctx) {
+    private static String expand(String text, Ctx ctx, boolean padPlayer) {
         if (text == null || text.isEmpty()) return "";
         StringBuilder sb = new StringBuilder(text.length() + 16);
         int i = 0;
@@ -331,9 +357,10 @@ public final class ChatFormat {
                 break;
             }
             sb.append(text, i, open);
-            String value = builtin(text.substring(open + 1, close), ctx);
+            String key = text.substring(open + 1, close);
+            String value = builtin(key, ctx);
             if (value == null) sb.append(text, open, close + 1);
-            else sb.append(value);
+            else sb.append(padPlayer && "player".equals(key) ? ChatHeads.withMargin(value) : value);
             i = close + 1;
         }
         return sb.toString();

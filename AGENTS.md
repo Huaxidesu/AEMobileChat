@@ -23,6 +23,10 @@ GTNHChat：面向 Minecraft 1.7.10（GTNH / Thermos）服务端的聊天格式�
 代码已完成并可构建，产物 `build/libs/gtnchat-1.7.10-<版本>.jar`。
 本机服务端已装该 jar 并成功启动，`/gtchat status` 各项正常。
 
+客户端回执（`TYPE_CLIENT_READY`）自 1.1.2 起帧尾带一个能力位字节，目前只有一位
+`CAP_CHAT_HEADS`：客户端会用反射读 `NecroTempusConfig.ChatHeadsEnabled` 上报，
+服务端据此在名字左边补一个空格（`chat.chat-heads: auto|on|off`，见 `chat/ChatHeads.java`）。
+
 未验证的部分（需要在线玩家 / 第二台服务器）见 `doc/开发计划.md`。
 
 ## 目录
@@ -31,7 +35,8 @@ GTNHChat：面向 Minecraft 1.7.10（GTNH / Thermos）服务端的聊天格式�
 build.gradle / gradle.properties / dependencies.gradle   构建
 src/main/java/com/huaxidesu/gtnchat/
   chat/      颜色码解析、规则匹配、组件组装；TeamInfo（ServerUtilities 队伍）、
-             WorldNames（MV alias / 家园世界 / 内置维度表）
+             WorldNames（MV alias / 家园世界 / 内置维度表）、
+             ChatHeads（客户端画聊天头像时名字留边）
   config/    两份 YAML 的解析与内存模型
   relay/     跨服帧编解码、去重、收发
   net/       模组网络通道

@@ -27,6 +27,11 @@ public final class Config {
     public static String serverDisplay = "服务器";
 
     public static int maxLength = 256;
+    /** 名字留边口径，见 {@link com.huaxidesu.gtnchat.chat.ChatHeads} */
+    public static final int CHAT_HEADS_AUTO = 0;
+    public static final int CHAT_HEADS_ON = 1;
+    public static final int CHAT_HEADS_OFF = 2;
+    public static int chatHeads = CHAT_HEADS_AUTO;
     public static final List<Rule> rules = new ArrayList<Rule>();
     public static final Map<String, Style> styles = new LinkedHashMap<String, Style>();
     public static final Map<Integer, String> worldNames = new LinkedHashMap<Integer, String>();
@@ -99,6 +104,7 @@ public final class Config {
 
             Map<String, Object> chat = map(root.get("chat"));
             maxLength = num(chat.get("max-length"), maxLength);
+            chatHeads = headsMode(chat.get("chat-heads"), chatHeads);
             parseRules(map(chat.get("rules")));
 
             worldNames.clear();
@@ -212,6 +218,16 @@ public final class Config {
         String s = String.valueOf(o).trim();
         if ("true".equalsIgnoreCase(s)) return true;
         if ("false".equalsIgnoreCase(s)) return false;
+        return def;
+    }
+
+    /** {@code chat-heads}：auto / on / off，也接受 true / false */
+    private static int headsMode(Object o, int def) {
+        if (o == null) return def;
+        String s = String.valueOf(o).trim();
+        if ("on".equalsIgnoreCase(s) || "true".equalsIgnoreCase(s)) return CHAT_HEADS_ON;
+        if ("off".equalsIgnoreCase(s) || "false".equalsIgnoreCase(s)) return CHAT_HEADS_OFF;
+        if ("auto".equalsIgnoreCase(s)) return CHAT_HEADS_AUTO;
         return def;
     }
 }

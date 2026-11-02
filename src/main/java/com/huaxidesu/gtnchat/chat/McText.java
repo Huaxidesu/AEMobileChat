@@ -60,6 +60,11 @@ public final class McText {
         return root;
     }
 
+    /** 这个字符是不是颜色码字符（不含前导的 {@code &} / {@code §}）。 */
+    public static boolean isCode(char c) {
+        return lookup(c) != null;
+    }
+
     /** 去掉颜色码，用于日志和长度判断。 */
     public static String plain(String text) {
         if (text == null) return "";

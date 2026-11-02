@@ -46,6 +46,8 @@ public final class ClientNet {
             out.write(new byte[] { 'G', 'T', 'C', '1' });
             out.writeByte(Config.relayProtocol);
             out.writeByte(ChatRelay.TYPE_CLIENT_READY);
+            // 能力位：服务端据此决定聊天要不要给名字留边（老服务端读不到会忽略）
+            out.writeByte(ChatHeadsProbe.caps());
             out.flush();
             ChatNet.sendToServer(bos.toByteArray());
         } catch (Throwable ignored) {}

@@ -21,6 +21,7 @@ import net.minecraft.util.IChatComponent;
 import com.huaxidesu.gtnchat.GTNHChat;
 import com.huaxidesu.gtnchat.bridge.MobileBridge;
 import com.huaxidesu.gtnchat.chat.ChatFormat;
+import com.huaxidesu.gtnchat.chat.ChatHeads;
 import com.huaxidesu.gtnchat.chat.TeamInfo;
 import com.huaxidesu.gtnchat.config.Config;
 import com.huaxidesu.gtnchat.config.Rule;
@@ -211,7 +212,13 @@ public final class ChatRelay {
                 return;
             }
             if (type == TYPE_CLIENT_READY) {
-                markClientMod(sender);
+                // 1.1.2 起帧尾多一个能力位字节；老客户端没有，读到 EOF 就是全 0
+                byte caps = 0;
+                try {
+                    caps = in.readByte();
+                } catch (java.io.EOFException ignored) {
+                }
+                markClientMod(sender, caps);
                 return;
             }
             if (type == TYPE_HELLO) return;
@@ -420,12 +427,19 @@ public final class ChatRelay {
     // ------------------------------------------------------------ 客户端是否装了本模组
 
     /** 收到客户端回执：这个玩家的客户端装了本模组，成就公告由客户端上报驱动。 */
-    private static void markClientMod(EntityPlayerMP sender) {
+    private static void markClientMod(EntityPlayerMP sender, byte caps) {
         if (sender == null) return;
+        String name = sender.getCommandSenderName();
         synchronized (CLIENT_MOD) {
-            CLIENT_MOD.put(sender.getCommandSenderName(), System.currentTimeMillis());
+            CLIENT_MOD.put(name, System.currentTimeMillis());
         }
-        if (Config.debug) GTNHChat.LOG.info("客户端回执：" + sender.getCommandSenderName() + " 装了 GTNHChat");
+        // 客户端顺带上报「名字前会不会画头像」，决定聊天要不要给名字留边
+        ChatHeads.report(name, caps);
+        if (Config.debug) {
+            GTNHChat.LOG.info(
+                "客户端回执：" + name + " 装了 GTNHChat，聊天头像: "
+                    + ((caps & ChatHeads.CAP_CHAT_HEADS) != 0 ? "开" : "关"));
+        }
     }
 
     /** 玩家退出时清掉，避免同名重进（离线模式换人）时沿用上一个人的状态 */
