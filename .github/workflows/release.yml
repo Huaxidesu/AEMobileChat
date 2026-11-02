@@ -1,57 +1,23 @@
 # 打 tag 就构建并发布到 GitHub Release。
 #
-# 版本号来自 git tag（build.gradle 用 git-version 插件），fetch-depth 必须是 0。
-# 构建要 Java 8：模组是 1.7.10 / Forge 10.13，Java 17 编译会在 mixin 注解处理阶段炸。
+# 构建环境交给 GTNH 官方的可复用 workflow：ForgeGradle 1.2 在 GitHub Actions 上有一堆环境坑
+# （最典型的是 `:applyBinPatches` 报 CrashReport 的 checksum 不匹配），自己拼 steps 反复踩不划算，
+# 官方那份每天在跑，JDK/toolchain/缓存都配好了。GTNH 官方示例模组也是这么写的。
+#
+# 版本号来自 git tag（build.gradle 用 git-version 插件），所以必须由 tag 触发。
 name: Release
 
 on:
   push:
     tags:
       - '*'
-  # 手动补发用：在 Actions 页面选 tag 作为 ref 跑一次
+  # 手动补发用：Actions 页面选 tag 作为 ref 跑一次
   workflow_dispatch:
 
 permissions:
   contents: write
 
 jobs:
-  build:
-    runs-on: ubuntu-latest
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
-
-      - name: Set up JDK 8
-        uses: actions/setup-java@v4
-        with:
-          java-version: '8'
-          distribution: 'temurin'
-          cache: gradle
-
-      - name: Grant execute permission for gradlew
-        run: chmod +x gradlew
-
-      # 必须先跑这个：ForgeGradle 1.2 要它下载并准备 minecraft/forge 的 binpatch 环境，
-      # 直接 build 会在 :applyBinPatches 报 CrashReport 的 checksum 不匹配。
-      - name: Setup workspace
-        run: ./gradlew setupCIWorkspace --no-daemon
-
-      - name: Build
-        run: ./gradlew build -x test --no-daemon
-
-      - name: Collect jars
-        run: |
-          mkdir -p dist
-          cp build/libs/*.jar dist/
-          ls -lh dist
-
-      # 只在 tag 上发 Release：手动触发（workflow_dispatch）只用来验证能不能编出来
-      - name: Release
-        if: startsWith(github.ref, 'refs/tags/')
-        uses: softprops/action-gh-release@v2
-        with:
-          files: dist/*.jar
-          generate_release_notes: true
-          fail_on_unmatched_files: true
+  release-tags:
+    uses: GTNewHorizons/GTNH-Actions-Workflows/.github/workflows/release-tags.yml@master
+    secrets: inherit
