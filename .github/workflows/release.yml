@@ -33,6 +33,11 @@ jobs:
       - name: Grant execute permission for gradlew
         run: chmod +x gradlew
 
+      # 必须先跑这个：ForgeGradle 1.2 要它下载并准备 minecraft/forge 的 binpatch 环境，
+      # 直接 build 会在 :applyBinPatches 报 CrashReport 的 checksum 不匹配。
+      - name: Setup workspace
+        run: ./gradlew setupCIWorkspace --no-daemon
+
       - name: Build
         run: ./gradlew build -x test --no-daemon
 
