@@ -38,7 +38,17 @@ public final class Config {
 
     public static boolean relayEnabled = true;
     public static String relayChannel = "gtnchat";
+    /** 本服自己的协议版本，也是「接收端能读到的最高版本」 */
     public static int relayProtocol = 1;
+    /**
+     * 还能读懂的最低协议版本。接收端接受 {@code [relayMinProtocol, relayProtocol]} 区间，
+     * 不再要求严格相等 —— 这样服务端升了版本、客户端没升也照样能通。
+     *
+     * <p><b>这是对外的承诺</b>：只要写着 1，就等于保证仍能正确解析协议 1 的帧。
+     * 动了帧结构（magic / 长度 / type 编码 / 已有字段的含义）就必须同一次把它抬上去，
+     * 否则老帧不是被丢弃，而是被读成垃圾 —— 那比丢弃更难查。
+     */
+    public static int relayMinProtocol = 1;
     public static boolean relayKeepClick = false;
     /** 跨服消息是否额外写一条带来源的日志（控制台翻日志时好找） */
     public static boolean relayLog = true;
@@ -118,6 +128,12 @@ public final class Config {
             relayEnabled = bool(relay.get("enabled"), relayEnabled);
             relayChannel = str(relay.get("channel"), relayChannel);
             relayProtocol = num(relay.get("protocol"), relayProtocol);
+            relayMinProtocol = num(relay.get("min-protocol"), relayMinProtocol);
+            // 写反了（min > 自己的版本）等于谁都收不了，按自己的版本兜底并留个话
+            if (relayMinProtocol < 1 || relayMinProtocol > relayProtocol) {
+                GTNHChat.LOG.warn("relay.min-protocol 超出范围（" + relayMinProtocol + "），已按 " + relayProtocol + " 处理");
+                relayMinProtocol = relayProtocol;
+            }
             relayKeepClick = bool(relay.get("keep-click"), relayKeepClick);
             relayLog = bool(relay.get("log"), relayLog);
 

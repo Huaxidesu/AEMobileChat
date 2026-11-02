@@ -14,7 +14,8 @@ import com.huaxidesu.gtnchat.config.Config;
  * 于是名字前面的方括号 `]` 和头像之间是 0px，后面那个字离头像只有 1px —— 整行看起来是挤在一起的。
  *
  * <p>服务端唯一能做的就是在这个位置留边。但留边会让没开头像的客户端多出一个空格，
- * 所以先要知道「对面到底画不画」：客户端回执里带一个能力位（{@link #CAP_CHAT_HEADS}），
+ * 所以先要知道「对面到底画不画」：客户端回执里带一个能力位
+ * （{@link com.huaxidesu.gtnchat.net.Caps#C_CHAT_HEADS}），
  * 这里按玩家记下来；配置里再用 {@code chat.chat-heads} 决定用哪种口径。
  *
  * <p>整条聊天是广播同一个组件，没法按人分开排，所以判定结果是「全局生效」：
@@ -22,18 +23,15 @@ import com.huaxidesu.gtnchat.config.Config;
  */
 public final class ChatHeads {
 
-    /** 客户端回执里的能力位：名字前会画头像 */
-    public static final byte CAP_CHAT_HEADS = 1;
-
     /** 上报了「名字前会画头像」的客户端（按玩家名，离线即清） */
     private static final Set<String> CLIENTS = Collections
         .newSetFromMap(new ConcurrentHashMap<String, Boolean>());
 
     private ChatHeads() {}
 
-    public static void report(String player, byte caps) {
+    public static void report(String player, int caps) {
         if (player == null || player.isEmpty()) return;
-        if ((caps & CAP_CHAT_HEADS) != 0) CLIENTS.add(player);
+        if ((caps & com.huaxidesu.gtnchat.net.Caps.C_CHAT_HEADS) != 0) CLIENTS.add(player);
         else CLIENTS.remove(player);
     }
 

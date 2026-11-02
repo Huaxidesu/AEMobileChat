@@ -23,9 +23,14 @@ GTNHChat：面向 Minecraft 1.7.10（GTNH / Thermos）服务端的聊天格式�
 代码已完成并可构建，产物 `build/libs/gtnchat-1.7.10-<版本>.jar`。
 本机服务端已装该 jar 并成功启动，`/gtchat status` 各项正常。
 
-客户端回执（`TYPE_CLIENT_READY`）自 1.1.2 起帧尾带一个能力位字节，目前只有一位
-`CAP_CHAT_HEADS`：客户端会用反射读 `NecroTempusConfig.ChatHeadsEnabled` 上报，
-服务端据此在名字左边补一个空格（`chat.chat-heads: auto|on|off`，见 `chat/ChatHeads.java`）。
+客户端回执（`TYPE_CLIENT_READY`）自 1.1.2 起帧尾带能力位，1.2.0 起扩成两个字节并加了下行能力位：
+客户端用反射读 `NecroTempusConfig.ChatHeadsEnabled` 上报「会画头像」，服务端据此在名字左边补一个空格
+（`chat.chat-heads: auto|on|off`，见 `chat/ChatHeads.java`）。
+
+**版本策略（1.2.0）**：`relay.protocol` 只代表「帧结构版本」，接收端接受
+`[relay.min-protocol, relay.protocol]` 区间；功能差异一律走能力位（`net/Caps`），
+所以加功能不用抬协议号、也不用逼客户端升级。两条纪律写死在 `doc/架构设计.md` 的「版本与能力位」：
+**只在尾部追加字段**、**动帧结构必须同一次抬 `min-protocol`**。
 
 未验证的部分（需要在线玩家 / 第二台服务器）见 `doc/开发计划.md`。
 
@@ -39,7 +44,7 @@ src/main/java/com/huaxidesu/gtnchat/
              ChatHeads（客户端画聊天头像时名字留边）
   config/    两份 YAML 的解析与内存模型
   relay/     跨服帧编解码、去重、收发
-  net/       模组网络通道
+  net/       模组网络通道；Caps（能力位）、Clients（各客户端上报了什么）
   bridge/    交给 AEMobile（手机端）的元数据，反射调用，没装时停用
   nei/       物品链接跨服桥（反射）
   client/    成就检测与握手（仅客户端）

@@ -26,7 +26,9 @@ import com.huaxidesu.gtnchat.chat.TeamInfo;
 import com.huaxidesu.gtnchat.config.Config;
 import com.huaxidesu.gtnchat.config.Rule;
 import com.huaxidesu.gtnchat.nei.NeiLink;
+import com.huaxidesu.gtnchat.net.Caps;
 import com.huaxidesu.gtnchat.net.ChatNet;
+import com.huaxidesu.gtnchat.net.Clients;
 import com.huaxidesu.gtnchat.util.MainThread;
 import com.huaxidesu.gtnchat.util.Reflect;
 
@@ -72,8 +74,6 @@ public final class ChatRelay {
     };
 
     private static final Map<String, Long> LAST_REPORT = new HashMap<String, Long>();
-    /** 玩家名 → 收到客户端回执的时间。只在收到回执时写，断开不清（重进会再回执一次）。 */
-    private static final Map<String, Long> CLIENT_MOD = new HashMap<String, Long>();
 
     private ChatRelay() {}
 
@@ -148,10 +148,28 @@ public final class ChatRelay {
         }
     }
 
-    /** 进服握手：告诉客户端服务端装了本模组，可以上报成就。 */
+    /**
+     * 进服握手：告诉客户端服务端装了本模组、能提供哪些能力、最低接受哪个协议版本。
+     *
+     * <p>帧长从 6 字节变成 8 字节（1.2.0），但<b>协议号没动</b>：老客户端的
+     * {@code ClientNet.handle} 只读前 6 个字节，多出来的两字节它当没看见，
+     * 行为和升级前一模一样。这就是「加字段不用抬版本」的典型写法 —— 只往后追加。
+     */
     public static void sendHello(EntityPlayerMP player) {
-        byte[] frame = new byte[] { 'G', 'T', 'C', '1', (byte) Config.relayProtocol, TYPE_HELLO };
+        byte[] frame = new byte[] { 'G', 'T', 'C', '1', (byte) Config.relayProtocol, TYPE_HELLO,
+            (byte) serverCaps(), (byte) Config.relayMinProtocol };
         ChatNet.sendToPlayer(player, frame);
+    }
+
+    /** 本服能提供的能力，见 {@link Caps}。握手帧与 {@code /gtchat status} 共用同一份口径。 */
+    public static int serverCaps() {
+        int caps = 0;
+        if (Config.chatHeads != Config.CHAT_HEADS_OFF) caps |= Caps.S_HEADS_PAD;
+        if (Config.relayEnabled) caps |= Caps.S_RELAY;
+        if (Config.achievementEnabled) caps |= Caps.S_ACH;
+        if (Config.neiEnabled && NeiLink.available()) caps |= Caps.S_NEI;
+        if (MobileBridge.enabled()) caps |= Caps.S_APP;
+        return caps;
     }
 
     private static void send(Out out, EntityPlayerMP preferred) throws Exception {
@@ -203,8 +221,14 @@ public final class ChatRelay {
             }
             int protocol = in.readUnsignedByte();
             byte type = in.readByte();
-            if (protocol != Config.relayProtocol) {
-                if (Config.debug) GTNHChat.LOG.info("跨服协议版本不一致，丢弃: " + protocol);
+            // 接受 [最低可读版本, 自己的版本] 区间，不再要求严格相等：
+            // 服务端升了功能、客户端没跟着升级时，老帧照样能读 ——
+            // 因为所有后加的字段都只在尾部追加，读不到就按默认值处理（见 handleChat）。
+            if (protocol < Config.relayMinProtocol || protocol > Config.relayProtocol) {
+                if (Config.debug) {
+                    GTNHChat.LOG.info(
+                        "协议版本不在接受区间 [" + Config.relayMinProtocol + ", " + Config.relayProtocol + "]，丢弃: " + protocol);
+                }
                 return;
             }
             if (type == TYPE_REPORT) {
@@ -212,13 +236,9 @@ public final class ChatRelay {
                 return;
             }
             if (type == TYPE_CLIENT_READY) {
-                // 1.1.2 起帧尾多一个能力位字节；老客户端没有，读到 EOF 就是全 0
-                byte caps = 0;
-                try {
-                    caps = in.readByte();
-                } catch (java.io.EOFException ignored) {
-                }
-                markClientMod(sender, caps);
+                // 1.1.2 起帧尾带能力位；1.2.0 起扩成两个字节（低字节在前）。
+                // 更老的客户端一个字节都不带，读到 EOF 就是 0。
+                markClientMod(sender, protocol, readCaps(in));
                 return;
             }
             if (type == TYPE_HELLO) return;
@@ -426,28 +446,37 @@ public final class ChatRelay {
 
     // ------------------------------------------------------------ 客户端是否装了本模组
 
-    /** 收到客户端回执：这个玩家的客户端装了本模组，成就公告由客户端上报驱动。 */
-    private static void markClientMod(EntityPlayerMP sender, byte caps) {
+    /** 收到客户端回执：记下「这个玩家的客户端装了本模组」，以及它的版本和能力。 */
+    private static void markClientMod(EntityPlayerMP sender, int protocol, int caps) {
         if (sender == null) return;
         String name = sender.getCommandSenderName();
-        synchronized (CLIENT_MOD) {
-            CLIENT_MOD.put(name, System.currentTimeMillis());
-        }
+        Clients.put(name, protocol, caps);
         // 客户端顺带上报「名字前会不会画头像」，决定聊天要不要给名字留边
         ChatHeads.report(name, caps);
         if (Config.debug) {
-            GTNHChat.LOG.info(
-                "客户端回执：" + name + " 装了 GTNHChat，聊天头像: "
-                    + ((caps & ChatHeads.CAP_CHAT_HEADS) != 0 ? "开" : "关"));
+            GTNHChat.LOG.info("客户端回执：" + name + " 协议 " + protocol + "（本服 " + Config.relayProtocol
+                + "），能力 " + Caps.describeClient(caps));
         }
+    }
+
+    /** 读最多两个字节的能力位，缺的按 0 补（老客户端只发过一个，更老的没发过）。 */
+    private static int readCaps(DataInputStream in) {
+        int caps;
+        try {
+            caps = in.readUnsignedByte();
+        } catch (java.io.IOException old) {
+            return 0;
+        }
+        try {
+            caps |= in.readUnsignedByte() << 8;
+        } catch (java.io.IOException old) {
+        }
+        return caps;
     }
 
     /** 玩家退出时清掉，避免同名重进（离线模式换人）时沿用上一个人的状态 */
     public static void clearClientMod(String player) {
-        if (player == null) return;
-        synchronized (CLIENT_MOD) {
-            CLIENT_MOD.remove(player);
-        }
+        Clients.remove(player);
     }
 
     /**
@@ -462,9 +491,7 @@ public final class ChatRelay {
      */
     public static int clientModPresent(String player) {
         if (player == null || player.isEmpty()) return -1;
-        synchronized (CLIENT_MOD) {
-            return CLIENT_MOD.containsKey(player) ? 1 : 0;
-        }
+        return Clients.present(player) ? 1 : 0;
     }
 
     private static Rule rule(String name) {

@@ -1,6 +1,6 @@
 package com.huaxidesu.gtnchat.client;
 
-import com.huaxidesu.gtnchat.chat.ChatHeads;
+import com.huaxidesu.gtnchat.net.Caps;
 
 import cpw.mods.fml.relauncher.Side;
 import cpw.mods.fml.relauncher.SideOnly;
@@ -21,9 +21,9 @@ public final class ChatHeadsProbe {
 
     private ChatHeadsProbe() {}
 
-    /** 回执里的能力位 */
-    public static byte caps() {
-        return heads() ? ChatHeads.CAP_CHAT_HEADS : 0;
+    /** 回执里属于本模块的能力位 */
+    public static int caps() {
+        return heads() ? Caps.C_CHAT_HEADS : 0;
     }
 
     public static boolean heads() {

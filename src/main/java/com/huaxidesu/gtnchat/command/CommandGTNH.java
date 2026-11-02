@@ -22,6 +22,8 @@ import com.huaxidesu.gtnchat.chat.TeamInfo;
 import com.huaxidesu.gtnchat.config.Config;
 import com.huaxidesu.gtnchat.config.Rule;
 import com.huaxidesu.gtnchat.nei.NeiLink;
+import com.huaxidesu.gtnchat.net.Caps;
+import com.huaxidesu.gtnchat.net.Clients;
 import com.huaxidesu.gtnchat.relay.ChatRelay;
 
 /** {@code /gtchat}：重载配置、查看状态、在没人聊天时造几条消息做验证。 */
@@ -67,7 +69,10 @@ public class CommandGTNH implements ICommand {
         }
         if ("status".equals(sub)) {
             reply(sender, "服务器标识: " + Config.serverId + "（" + Config.serverDisplay + "）");
-            reply(sender, "跨服转发: " + (Config.relayEnabled ? "开" : "关") + "，通道 " + Config.relayChannel + "，协议 " + Config.relayProtocol);
+            reply(sender, "跨服转发: " + (Config.relayEnabled ? "开" : "关") + "，通道 " + Config.relayChannel
+                + "，协议 " + Config.relayProtocol + "（接受 " + Config.relayMinProtocol + "~" + Config.relayProtocol + "）");
+            reply(sender, "服务端能力: " + Caps.describeServer(ChatRelay.serverCaps()));
+            reply(sender, "客户端回执: " + Clients.summary());
             reply(sender, "成就公告: " + (Config.achievementEnabled ? "开" : "关")
                 + "，NEI 桥: " + (NeiLink.available() ? (NeiLink.hookApplied() ? "可用（已注入）" : "可用（未注入）") : "不可用"));
             reply(sender, "手机端桥: " + (MobileBridge.enabled()
