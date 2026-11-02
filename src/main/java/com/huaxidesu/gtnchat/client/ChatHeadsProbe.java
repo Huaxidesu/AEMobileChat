@@ -8,7 +8,7 @@ import cpw.mods.fml.relauncher.SideOnly;
 /**
  * 探测本客户端会不会在聊天里画玩家头像（NecroTempus 的 ChatHeads）。
  *
- * <p>服务端没法知道对面装了什么客户端模组，只能由这里读了配置再在回执里上报。
+ * <p>服务端无法知道对端安装了什么客户端模组，只能由这里读了配置再在回执里上报。
  * 用反射：本模组不依赖 NecroTempus，没装时整个探测返回 false。
  *
  * <p>读的是静态字段 {@code NecroTempusConfig.ChatHeadsEnabled}，也是它自己渲染时判断的那个值，

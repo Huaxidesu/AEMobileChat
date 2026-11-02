@@ -16,11 +16,11 @@ import cpw.mods.fml.relauncher.SideOnly;
  * 客户端与服务器之间的少量交互。
  *
  * <p>服务器在玩家进服时发一个握手帧；客户端只有收到握手后才会上报数据。
- * 这样服务端没装本模组时，客户端不会往一个没人监听的通道发东西。
+ * 这样服务端没装本模组时，客户端不会向一个无人监听的通道发送数据。
  *
  * <p>握手是<b>双向能力交换</b>的：服务端在 {@code HELLO} 里报「我能提供什么」和「最低接受哪个协议」，
  * 客户端在 {@code READY} 里报「我能做什么」。两边都不认识的位一律忽略，
- * 所以加功能不需要改协议号，也不用逼对面升级。
+ * 所以加功能不需要改协议号，也不用强制对端升级。
  */
 @SideOnly(Side.CLIENT)
 public final class ClientNet {
@@ -40,7 +40,7 @@ public final class ClientNet {
             if (data[5] != ChatRelay.TYPE_HELLO) return;
 
             // 1.2.0 起帧尾多两个字节：服务端能力位 + 最低接受协议。
-            // 老服务端只发 6 个字节 —— 什么都没报，按「都有」处理，
+            // 旧服务端只发 6 个字节 —— 什么都没报，按「都有」处理，
             // 不能因为客户端升级了反而少功能。
             if (data.length >= 8) {
                 serverCaps = data[6] & 0xFF;
@@ -55,7 +55,7 @@ public final class ClientNet {
             if (first) {
                 warnIfTooOld();
                 // 回执：服务端据此知道「这台客户端装了本模组」，成就公告才有来源。
-                // 顺带让 AEMobile 判断本地成就是不是该由它自己发（见 ChatRelay.clientModPresent）。
+                // 同时供 AEMobile 判断本地成就是否该由它自己发（见 ChatRelay.clientModPresent）。
                 sendReady();
             }
         } catch (Throwable ignored) {}
@@ -64,7 +64,7 @@ public final class ClientNet {
     /**
      * 服务端要求的最低协议比本客户端高。
      *
-     * <p>这不是「连不上」：聊天格式化、跨服这些老功能照常工作，只是服务端新加的东西可能用不上。
+     * <p>这不是「连不上」：聊天格式化、跨服这些原有功能照常工作，只是服务端新加的东西可能用不上。
      * 所以只写一条日志说明，不做任何阻拦 —— 以前这种情况是静默失效，玩家只会觉得「模组坏了」。
      */
     private static void warnIfTooOld() {
@@ -87,7 +87,7 @@ public final class ClientNet {
             out.write(new byte[] { 'G', 'T', 'C', '1' });
             out.writeByte(Config.relayProtocol);
             out.writeByte(ChatRelay.TYPE_CLIENT_READY);
-            // 能力位两个字节（低字节在前）：1.1.2 只发了一个，老服务端也只读一个，
+            // 能力位两个字节（低字节在前）：1.1.2 只发了一个，旧服务端也只读一个，
             // 所以这里扩宽不用抬协议号 —— 尾部追加字节，读不到就算了。
             int caps = caps();
             out.writeByte(caps & 0xFF);

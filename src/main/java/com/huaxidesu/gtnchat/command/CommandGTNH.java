@@ -26,7 +26,7 @@ import com.huaxidesu.gtnchat.net.Caps;
 import com.huaxidesu.gtnchat.net.Clients;
 import com.huaxidesu.gtnchat.relay.ChatRelay;
 
-/** {@code /gtchat}：重载配置、查看状态、在没人聊天时造几条消息做验证。 */
+/** {@code /gtchat}：重载配置、查看状态、在无人聊天时生成消息用于验证。 */
 public class CommandGTNH implements ICommand {
 
     private static final List<String> SUB = Arrays.asList("reload", "version", "status", "test");
@@ -156,8 +156,8 @@ public class CommandGTNH implements ICommand {
             return;
         }
         if ("item".equals(kind)) {
-            // 造一条和 NEI 真实分享同构的消息：文本 + /nei_bookmark 点击 + 多行悬停。
-            // 本机没有真人用 NEI 分享时，靠这条验证手机端能否把物品从正文里认出来。
+            // 构造一条和 NEI 真实分享同构的消息：文本 + /nei_bookmark 点击 + 多行悬停。
+            // 本机没有真人用 NEI 分享时，靠这条验证手机端能否把物品从正文中识别出来。
             String name = args.length > 2 ? join(args, 2) : "石头";
             ChatComponentText item = new ChatComponentText("[" + name + "]");
             ChatStyle st = new ChatStyle();
@@ -290,7 +290,7 @@ public class CommandGTNH implements ICommand {
         return sb.toString();
     }
 
-    /** 把组件树摊平成一行，用于在控制台核对渲染结果。 */
+    /** 把组件树展开为单行，用于在控制台核对渲染结果。 */
     private static String describe(IChatComponent root) {
         StringBuilder sb = new StringBuilder();
         describe(root, sb);

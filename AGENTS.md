@@ -16,7 +16,7 @@ GTNHChat：面向 Minecraft 1.7.10（GTNH / Thermos）服务端的聊天格式�
 | **`doc/` 不进 git** | 已在 `.gitignore`。不要 `git add -f` |
 | **push 交给仓库所有者** | 本地 `git commit` 可以做，`git push` 不做 |
 | **不复制第三方代码** | 与 NEI 的交互只走反射和一处注入，不打包、不复制对方代码 |
-| **配置改动写进默认文件** | 默认值在 `src/main/resources/defaults/`，只改代码不改默认值等于没改 |
+| **配置改动写进默认文件** | 默认值在 `src/main/resources/defaults/`，只修改代码而不更新默认值时改动不生效 |
 
 ## 当前状态
 
@@ -29,7 +29,7 @@ GTNHChat：面向 Minecraft 1.7.10（GTNH / Thermos）服务端的聊天格式�
 
 **版本策略（1.2.0）**：`relay.protocol` 只代表「帧结构版本」，接收端接受
 `[relay.min-protocol, relay.protocol]` 区间；功能差异一律走能力位（`net/Caps`），
-所以加功能不用抬协议号、也不用逼客户端升级。两条纪律写死在 `doc/架构设计.md` 的「版本与能力位」：
+所以加功能不用抬协议号、也不用强制客户端升级。两条纪律固化在 `doc/架构设计.md` 的「版本与能力位」：
 **只在尾部追加字段**、**动帧结构必须同一次抬 `min-protocol`**。
 
 未验证的部分（需要在线玩家 / 第二台服务器）见 `doc/开发计划.md`。
@@ -67,7 +67,7 @@ export JAVA_HOME="D:/Library/DevelopmentKit/Java/Zulu/zulu8"
 ```
 
 产物在 `build/libs/`。**工作区有未提交改动时文件名带 `.dirty`**，
-拷贝部署时注意别拿到旧包（先 `ls -la` 看时间戳）。
+拷贝部署时注意不要取到旧包（先 `ls -la` 看时间戳）。
 
 版本号来自 git tag，仓库至少要有一个 tag，否则构建直接报错。
 
@@ -87,14 +87,14 @@ cd "D:/Game/Minecraft/Server/GTNH290RC2"
 cmd //c start-aem-detached.bat          # 独立窗口，不占调用方终端
 ```
 
-启动约 60 秒（日志出现 `Done (`）。**换 jar 前必须停服**：
+启动约 60 秒（日志出现 `Done (`）。**更换 jar 前必须停止服务器**：
 
 ```bash
 netstat -ano | grep ":25588"            # 拿 PID
 taskkill //F //PID <pid>
 ```
 
-等 20 秒再启动，否则端口还在 `TIME_WAIT`，启动脚本会跳过。
+等待 20 秒再启动，否则端口仍处于 `TIME_WAIT`，启动脚本会跳过。
 
 在没人聊天时验证（借用本机调试模组的命令桥）：
 
@@ -109,7 +109,7 @@ iconv -f GBK -t UTF-8 logs/latest.log | grep "GTNHChat"
 `test chat <内容>` / `test json [规则名] <内容>` / `test bench [次数]` /
 `test achievement <成就ID>` / `test relay <内容>` / `test nei`。
 
-- `test chat`：无人在线时把渲染后的组件树摊平回显，逐段核对颜色、悬停、点击
+- `test chat`：无人在线时把渲染后的组件树展开为单行回显，逐段核对颜色、悬停、点击
 - `test json`：输出真正发给客户端的 JSON，看 `color` / `clickEvent` / `hoverEvent`
 - `test bench`：渲染开销基准
 - `test relay`：造一条「来自其它服务器」的消息，验证来源服务器名与接收端渲染
@@ -124,10 +124,10 @@ iconv -f GBK -t UTF-8 logs/latest.log | grep "GTNHChat"
 - **任务书（BetterQuesting）**：任务分享是一条普通聊天，本项目只保证标记串原样连续。
 - **客户端**：不装也能进服，只是没有成就公告。
 
-## 已知坑
+## 已知问题
 
-见 `doc/踩坑.md`。最容易栽的三条：
+见 `doc/已知问题.md`，最关键的三条：
 
-1. FML 网络事件不在 Forge 总线上，监听不了别人的通道。
+1. FML 网络事件不在 Forge 总线上，无法监听其它模组的通道。
 2. 聊天事件在网络线程，渲染可以在里面做完，但广播必须回主线程。
 3. 服务端日志是 GBK，`grep` 中文前先 `iconv`。

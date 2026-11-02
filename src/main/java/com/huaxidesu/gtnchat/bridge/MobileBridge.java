@@ -11,7 +11,7 @@ import com.huaxidesu.gtnchat.config.Config;
  * 把渲染好的聊天连同元数据交给 AEMobile（手机端）。
  *
  * <p>没有这层时，AEMobile 只能在 {@code sendChatMsg} 处拿到组件：玩家名、来源服务器
- * 都已经拼进文本里了，手机端只能把它们当成「服务器广播」，也没法标注跨服来源。
+ * 都已经拼进文本里了，手机端只能把它们当成「服务器广播」，也无法标注跨服来源。
  * 这里在广播前把这几项补上。
  *
  * <p><b>不做编译期依赖</b>：AEMobile 是独立模组，本类只用反射探测它的入口。
@@ -75,7 +75,7 @@ public final class MobileBridge {
             GTNHChat.LOG.info("已接上 AEMobile 聊天桥（含队伍名与队伍颜色）");
             return;
         } catch (Throwable ignored) {
-            // 老版本 AEMobile：退回 8 参数签名
+            // 旧版本 AEMobile：退回 8 参数签名
         }
         try {
             accept = hub.getMethod(
@@ -92,7 +92,7 @@ public final class MobileBridge {
             GTNHChat.LOG.info("已接上 AEMobile 聊天桥（含队伍名）");
             return;
         } catch (Throwable ignored) {
-            // 老版本 AEMobile：退回 7 参数签名
+            // 旧版本 AEMobile：退回 7 参数签名
         }
         try {
             acceptLegacy = hub.getMethod(

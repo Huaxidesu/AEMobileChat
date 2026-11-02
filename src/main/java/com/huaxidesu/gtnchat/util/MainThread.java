@@ -10,7 +10,7 @@ import com.huaxidesu.gtnchat.GTNHChat;
  *
  * <p>玩家聊天事件在网络线程触发，而广播、发包、读写世界都必须在主线程。
  * 每条聊天单独投递一个任务会带来额外的调度开销，这里改成队列 + 每 tick 批量取，
- * 一次 tick 最多处理 {@link #BATCH} 条，避免有人刷屏时把整帧占满。
+ * 一次 tick 最多处理 {@link #BATCH} 条，避免大量消息涌入时占满整帧预算。
  */
 public final class MainThread {
 

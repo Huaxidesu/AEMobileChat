@@ -20,12 +20,12 @@ import com.huaxidesu.gtnchat.nei.NeiLink;
  * 在 NEI 生成物品链接前取一份物品数据。
  *
  * <p>NEI 把物品数据推给自己服的客户端后，只在本地缓存里留一个短标识；
- * 别的服务器没有这份数据，转发过去的链接点了会提示找不到。这里取到原始数据，
+ * <p>其它服务器没有这份数据，转发过去的链接点击后会提示找不到。这里取到原始数据，
  * 随聊天一起转给其它服务器，接收端再推给自己服的客户端。
  *
  * <p>只读取参数，不改 NEI 的行为。
  *
- * <p>{@code debug: true} 时顺带把 payload 结构和 NEI 自己的解析结果打出来：
+ * <p>{@code debug: true} 时同时输出 payload 结构和 NEI 自己的解析结果：
  * NEI 的 catch 只回 {@code e.toString()}，玩家聊天里只能看到一行
  * {@code java.lang.NullPointerException}，没有堆栈，定位不了。
  */

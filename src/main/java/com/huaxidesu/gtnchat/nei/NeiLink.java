@@ -35,7 +35,7 @@ import com.huaxidesu.gtnchat.util.MainThread;
  *
  * <p>NEI 的物品链接不是聊天消息：客户端把物品数据发给服务端，服务端生成一个短标识，
  * 把数据推给本服所有客户端，再广播一条带点击动作的聊天。也就是说链接只在「生成它的那台服务器」
- * 上有效 —— 直接把文字转到别的服，点开只会提示找不到数据。
+ * 上有效 —— 直接把文字转到其它服务器，点开只会提示找不到数据。
  *
  * <p>所以这里做两件事：拦下客户端发往 NEI 的物品数据，随聊天一起转给其它服务器；
  * 接收端把同一份数据推给自己服的客户端，再广播一条指向该数据的链接。
@@ -103,7 +103,7 @@ public final class NeiLink {
     /**
      * 本服玩家分享物品时调用（由 Mixin 挂在 NEI 的服务端入口上）。
      *
-     * <p>NEI 会在网络线程里走完整个流程，这里只把数据复制一份丢给主线程，
+     * <p>NEI 会在网络线程里走完整个流程，这里只把数据复制一份传递给主线程，
      * 不影响 NEI 自己的推送和广播。
      */
     public static void onLocalShare(EntityPlayerMP sender, NBTTagCompound payload) {
@@ -179,7 +179,7 @@ public final class NeiLink {
      * <p><b>不能用 {@code ItemStack.loadItemStackFromNBT}</b>：NEI 的 payload 是 StackInfo 格式
      * （{@code strId / Count / Damage / tag}），原版读的是数字 {@code id}，解析出来是 null，
      * 跨服物品链接会退化成 {@code [物品]}。优先走 NEI 自己的 {@code StackInfo.loadFromNBT}，
-     * 老格式再退回原版解析。
+     * 旧格式再退回原版解析。
      */
     private static ItemStack stackFromPayload(NBTTagCompound itemTag) {
         if (itemTag == null) return null;

@@ -9,16 +9,16 @@ import com.huaxidesu.gtnchat.config.Config;
 /**
  * 「客户端会在名字前面画头像」这件事的状态汇总。
  *
- * <p>头像不是服务端画的（NecroTempus 的 ChatHeads 模块），服务端既画不了也改不了它的位置：
+ * <p>头像不是服务端画的（NecroTempus 的 ChatHeads 模块），服务端既无法绘制也无法调整它的位置：
  * 它把 8×8 的头像画在「玩家名第一次出现的那个字符」上，占 9px 宽、上沿比文字还高 1px。
- * 于是名字前面的方括号 `]` 和头像之间是 0px，后面那个字离头像只有 1px —— 整行看起来是挤在一起的。
+ * 于是名字前面的方括号 `]` 和头像之间是 0px，后面那个字离头像只有 1px —— 整行显得拥挤。
  *
- * <p>服务端唯一能做的就是在这个位置留边。但留边会让没开头像的客户端多出一个空格，
- * 所以先要知道「对面到底画不画」：客户端回执里带一个能力位
+ * <p>服务端唯一能做的就是在这个位置留边。但留边会让未开启头像的客户端多出一个空格，
+ * 所以先要确认「对端是否绘制」：客户端回执里带一个能力位
  * （{@link com.huaxidesu.gtnchat.net.Caps#C_CHAT_HEADS}），
  * 这里按玩家记下来；配置里再用 {@code chat.chat-heads} 决定用哪种口径。
  *
- * <p>整条聊天是广播同一个组件，没法按人分开排，所以判定结果是「全局生效」：
+ * <p>整条聊天是广播同一个组件，无法按玩家分开排版，所以判定结果是「全局生效」：
  * 只要有一个上报了头像的客户端在线，所有人看到的都是留过边的版本。
  */
 public final class ChatHeads {
@@ -35,7 +35,7 @@ public final class ChatHeads {
         else CLIENTS.remove(player);
     }
 
-    /** 玩家退出时清掉：离线模式同名换人不能沿用上一个人的客户端能力 */
+    /** 玩家退出时清除：离线模式同名换人不能沿用上一个玩家的客户端能力 */
     public static void clear(String player) {
         if (player == null) return;
         CLIENTS.remove(player);

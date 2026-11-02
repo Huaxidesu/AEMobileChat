@@ -37,7 +37,7 @@ import net.minecraftforge.event.ServerChatEvent;
 /**
  * 聊天格式化与跨服转发的入口。
  *
- * <p>服务端负责渲染与转发；客户端只做一件服务端做不到的事 —— 检测成就解锁并上报。
+ * <p>服务端负责渲染与转发；客户端只做一件服务端无法完成的事 —— 检测成就解锁并上报。
  * 客户端不装本模组也能正常进服，只是不会有成就公告。
  */
 @Mod(
@@ -152,9 +152,9 @@ public class GTNHChat {
         @SubscribeEvent
         public void onLogout(PlayerEvent.PlayerLoggedOutEvent event) {
             if (event.player == null) return;
-            // 同名重进（离线模式换人）不该沿用上一个人的「客户端装了本模组」状态
+            // 同名重进（离线模式换人）不应沿用上一个玩家的「客户端装了本模组」状态
             ChatRelay.clearClientMod(event.player.getCommandSenderName());
-            // 客户端能力同理：那人走了，头像留边的判定要跟着变
+            // 客户端能力同理：玩家退出后，头像留边的判定要随之更新
             ChatHeads.clear(event.player.getCommandSenderName());
         }
     }

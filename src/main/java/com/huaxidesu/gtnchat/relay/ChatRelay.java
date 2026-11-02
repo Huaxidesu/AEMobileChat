@@ -38,8 +38,8 @@ import com.huaxidesu.gtnchat.util.Reflect;
  * <p>传输走代理自带的 {@code BungeeCord} 通道的 {@code Forward} 子通道：后端把消息写给代理，
  * 代理转发给同一网络内的其它后端，接收端在自己的通道上收到。代理端不需要装任何东西。
  *
- * <p>帧里带来源标识和消息序号：来源标识用来丢弃绕回来的自己的消息，序号用来兜底去重。
- * 协议版本不一致的帧直接丢弃，避免两代版本混跑时出现看不懂的字段。
+ * <p>帧里带来源标识和消息序号：来源标识用来丢弃回环到达的本服消息，序号用于后备去重。
+ * 协议版本不一致的帧直接丢弃，避免两代版本共存时出现无法识别的字段。
  */
 public final class ChatRelay {
 
@@ -93,7 +93,7 @@ public final class ChatRelay {
             out.writeUtf(team == null ? "" : team.name);
             out.writeUtf(team == null ? "" : team.desc);
             out.writeUtf(team == null ? "" : team.rank);
-            // 队伍颜色是最后加的（1.1.0）：老接收端读到 EOF 就当没有，不会解析失败
+            // 队伍颜色是最后加的（1.1.0）：旧接收端读到 EOF 就按缺失处理，不会解析失败
             out.writeUtf(team == null ? "" : team.color);
             send(out, sender);
         } catch (Throwable t) {
@@ -151,8 +151,8 @@ public final class ChatRelay {
     /**
      * 进服握手：告诉客户端服务端装了本模组、能提供哪些能力、最低接受哪个协议版本。
      *
-     * <p>帧长从 6 字节变成 8 字节（1.2.0），但<b>协议号没动</b>：老客户端的
-     * {@code ClientNet.handle} 只读前 6 个字节，多出来的两字节它当没看见，
+     * <p>帧长从 6 字节变成 8 字节（1.2.0），但<b>协议号未变更</b>：旧客户端的
+     * {@code ClientNet.handle} 只读前 6 个字节，多出来的两字节按不存在处理，
      * 行为和升级前一模一样。这就是「加字段不用抬版本」的典型写法 —— 只往后追加。
      */
     public static void sendHello(EntityPlayerMP player) {
@@ -222,7 +222,7 @@ public final class ChatRelay {
             int protocol = in.readUnsignedByte();
             byte type = in.readByte();
             // 接受 [最低可读版本, 自己的版本] 区间，不再要求严格相等：
-            // 服务端升了功能、客户端没跟着升级时，老帧照样能读 ——
+            // 服务端升了功能、客户端没跟着升级时，旧帧照样能读 ——
             // 因为所有后加的字段都只在尾部追加，读不到就按默认值处理（见 handleChat）。
             if (protocol < Config.relayMinProtocol || protocol > Config.relayProtocol) {
                 if (Config.debug) {
@@ -237,7 +237,7 @@ public final class ChatRelay {
             }
             if (type == TYPE_CLIENT_READY) {
                 // 1.1.2 起帧尾带能力位；1.2.0 起扩成两个字节（低字节在前）。
-                // 更老的客户端一个字节都不带，读到 EOF 就是 0。
+                // 更旧的客户端一个字节都不带，读到 EOF 就是 0。
                 markClientMod(sender, protocol, readCaps(in));
                 return;
             }
@@ -277,7 +277,7 @@ public final class ChatRelay {
         final String world = in.readUTF();
         final String message = in.readUTF();
         final String ruleName = in.readUTF();
-        // 团队三项是后加的：老版本发的帧到这就结束了，读不到就当没有。
+        // 团队三项是后加的：旧版本发的帧到这里就结束了，读不到就按缺失处理。
         // 不用 available() 判断 —— 在 Thermos 上它不可靠，会一直返回 0。
         String t0 = "", t1 = "", t2 = "", t3 = "";
         try {
@@ -295,7 +295,7 @@ public final class ChatRelay {
         final String teamColor = t3;
 
         // 控制台留一条带来源的记录：sendChatMsg 那条只有渲染后的文本，
-        // 服主翻日志时不好确认是从哪台服过来的
+        // 服主查阅日志时不易确认消息来自哪台服务器
         if (Config.relayLog) {
             GTNHChat.LOG.info("[跨服] " + originDisplay + " → " + Config.serverDisplay
                 + ": <" + sender + "> " + ChatFormat.sanitize(message));
@@ -342,10 +342,10 @@ public final class ChatRelay {
     }
 
     /**
-     * 接收别的子服转发过来的手机端聊天。
+     * 接收其它子服转发过来的手机端聊天。
      *
      * <p>游戏内渲染成 {@code [来源服][AEMobile][名字] 正文}，与 AEMobile 在本服的样式一致，
-     * 这样服主一眼能看出这条不是游戏里打的字。手机端只收正文：组件里那些前缀
+     * 这样服主可直接确认该条并非游戏内输入。手机端只收正文：组件里那些前缀
      * 手机端会自己拼，重复传过去会显示成「名字: [天空树][AEMobile][名字] 正文」。
      */
     private static void handleApp(DataInputStream in, String originDisplay) throws Exception {
@@ -366,7 +366,7 @@ public final class ChatRelay {
         });
     }
 
-    /** 手机端消息在别的服上的样子，颜色与 AEMobile 本服广播保持一致 */
+    /** 手机端消息在其它服务器上的显示样式，颜色与 AEMobile 本服广播保持一致 */
     private static IChatComponent renderAppLine(String originDisplay, String name, String text) {
         ChatComponentText head = new ChatComponentText("[" + originDisplay + "]");
         head.getChatStyle().setColor(EnumChatFormatting.GOLD);
@@ -451,7 +451,7 @@ public final class ChatRelay {
         if (sender == null) return;
         String name = sender.getCommandSenderName();
         Clients.put(name, protocol, caps);
-        // 客户端顺带上报「名字前会不会画头像」，决定聊天要不要给名字留边
+        // 客户端同时上报「名字前是否绘制头像」，服务端据此决定聊天要不要给名字留边
         ChatHeads.report(name, caps);
         if (Config.debug) {
             GTNHChat.LOG.info("客户端回执：" + name + " 协议 " + protocol + "（本服 " + Config.relayProtocol
@@ -459,7 +459,7 @@ public final class ChatRelay {
         }
     }
 
-    /** 读最多两个字节的能力位，缺的按 0 补（老客户端只发过一个，更老的没发过）。 */
+    /** 读最多两个字节的能力位，缺失的按 0 补（旧客户端只发过一个，更旧的没发过）。 */
     private static int readCaps(DataInputStream in) {
         int caps;
         try {
@@ -474,19 +474,19 @@ public final class ChatRelay {
         return caps;
     }
 
-    /** 玩家退出时清掉，避免同名重进（离线模式换人）时沿用上一个人的状态 */
+    /** 玩家退出时清除，避免同名重进（离线模式换人）时沿用上一个玩家的状态 */
     public static void clearClientMod(String player) {
         Clients.remove(player);
     }
 
     /**
-     * 这个玩家的客户端到底装没装本模组（成就公告靠客户端上报，只有装了才播得出来）。
+     * 这个玩家的客户端是否安装本模组（成就公告靠客户端上报，只有装了才播得出来）。
      *
      * <p>给 AEMobile 反射调用，决定本地成就由谁发：
      * <ul>
      *   <li>{@code 1} —— 客户端装了，本模组会播，手机端让路；</li>
-     *   <li>{@code 0} —— 客户端没装（或压根没回执），手机端自己发；</li>
-     *   <li>{@code -1} —— 不知道：老版本本模组没有回执机制，保持「让路」的老行为。</li>
+     *   <li>{@code 0} —— 客户端没装（或没有回执），手机端自己发；</li>
+     *   <li>{@code -1} —— 未知：旧版本本模组没有回执机制，保持「让路」的旧行为。</li>
      * </ul>
      */
     public static int clientModPresent(String player) {
@@ -503,7 +503,7 @@ public final class ChatRelay {
 
     // ------------------------------------------------------------------ 调试
 
-    /** 造一条「来自其它服务器」的聊天，用来在没有第二个服时验证接收链路。 */
+    /** 构造一条「来自其它服务器」的聊天，用来在没有第二个服务器时验证接收链路。 */
     public static void debugInject(String originId, String originDisplay, String sender, String message) {
         try {
             Out out = new Out(TYPE_CHAT, originId, originDisplay);
@@ -522,8 +522,8 @@ public final class ChatRelay {
     }
 
     /**
-     * 测试用：伪造一条「别的子服的手机端消息」，走完整的接收路径
-     * （渲染 → 交给手机端 → 广播）。本机只有一台后端，没法真跑两台来验证
+     * 测试用：伪造一条「其它子服的手机端消息」，走完整的接收路径
+     * （渲染 → 交给手机端 → 广播）。本机只有一台后端，无法真实运行两台来验证
      * {@link #handleApp} 的渲染与来源标签。
      */
     public static void debugInjectApp(String originId, String originDisplay, String name, String text) {

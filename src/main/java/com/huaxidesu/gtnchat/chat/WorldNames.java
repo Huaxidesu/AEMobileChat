@@ -21,11 +21,11 @@ import com.huaxidesu.gtnchat.config.Config;
  * <p>名字按下面的顺序取第一个命中的：
  * <ol>
  *   <li><b>Multiverse 的 alias</b>（{@code plugins/Multiverse-Core/worlds.yml}）——
- *       服主自己起的中文名，最权威；alias 和世界文件夹名一样就当没设置；</li>
+ *       服主自己起的中文名，最权威；alias 和世界文件夹名一样时视为未设置；</li>
  *   <li><b>config 覆盖</b>（{@code world-names} 里的 {@code '70': 暮色森林}）；</li>
  *   <li><b>内置维度表</b>（按 dimid，覆盖原版 + GTNH 常用维度）；</li>
- *   <li>家园世界兜底成 {@code 家园 #180}；</li>
- *   <li>再兜底 provider 英文名，最后是世界文件夹名。</li>
+ *   <li>家园世界缺省显示为 {@code 家园 #180}；</li>
+ *   <li>再回退到 provider 英文名，最后是世界文件夹名。</li>
  * </ol>
  *
  * <p>和 AEMobile 的 {@code metrics/WorldNames} 是同一套规则：两个模组各自实现一份，

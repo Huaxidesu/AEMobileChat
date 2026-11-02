@@ -79,7 +79,7 @@ public final class ChatFormat {
         }
     }
 
-    /** 规则缓存有效期。权限变更最多晚这么久生效，换来的是每条聊天省掉一次权限查询。 */
+    /** 规则缓存有效期。权限变更最多晚这么久生效，换来的是每条聊天减少一次权限查询。 */
     private static final long RULE_TTL_MS = 5000L;
 
     private static final Map<UUID, Cached> RULE_CACHE = new ConcurrentHashMap<UUID, Cached>();
@@ -380,7 +380,7 @@ public final class ChatFormat {
         if ("teamdesc".equals(key)) return clean(ctx.teamDesc);
         if ("teamrank".equals(key)) return clean(ctx.teamRank);
         // 队伍颜色：ServerUtilities 里配的那个色，渲染成 &9 这种形式交给后面的颜色解析。
-        // 没有队伍时给默认色，免得样式里的 &{teamcolor} 变成字面量。
+        // 没有队伍时给默认色，避免样式里的 &{teamcolor} 变成字面量。
         if ("teamcolor".equals(key)) {
             String c = ctx.teamColor == null || ctx.teamColor.isEmpty() ? TeamInfo.DEFAULT_COLOR : ctx.teamColor;
             return "&" + c;

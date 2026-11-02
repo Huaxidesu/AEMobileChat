@@ -20,7 +20,7 @@ import com.huaxidesu.gtnchat.config.Config;
  *
  * <p>没装 ServerUtilities 时整体停用，返回 null，聊天照常渲染（只是没有队伍前缀）。
  *
- * <p>按 UUID 缓存几秒：团队名和职位变化不频繁，而每条聊天都查一次反射不划算。
+ * <p>按 UUID 缓存几秒：团队名和职位变化不频繁，而每条聊天都反射查询开销过大。
  */
 public final class TeamInfo {
 
@@ -106,7 +106,7 @@ public final class TeamInfo {
             try {
                 mGetColor = forgeTeam.getMethod("getColor");
             } catch (Throwable ignored) {
-                // 老版本 ServerUtilities 没有队伍颜色：用默认色
+                // 旧版本 ServerUtilities 没有队伍颜色：使用默认色
             }
             available = true;
             GTNHChat.LOG.info("已接上 ServerUtilities 团队");
@@ -116,7 +116,7 @@ public final class TeamInfo {
         }
     }
 
-    /** 调试用：把中间状态摊开，排查「有队伍但不显示」这类问题 */
+    /** 调试用：输出中间状态，排查「有队伍但不显示」这类问题 */
     public static String debug(EntityPlayerMP player) {
         check();
         if (!available) return "ServerUtilities 未加载";
@@ -179,7 +179,7 @@ public final class TeamInfo {
             } catch (Throwable ignored) {}
 
             // ServerUtilities 的单人队默认没有名字（title 为空），只有简介。
-            // 这种情况用简介兜底，否则「有队伍但一个字都不显示」，看着像功能没做。
+            // 这种情况用简介作为后备，否则有队伍时完全不显示名称，表现为功能缺失。
             if (name.isEmpty()) {
                 String d = desc == null ? "" : desc.trim();
                 if (!d.isEmpty() && d.length() <= 16) name = d;
@@ -208,7 +208,7 @@ public final class TeamInfo {
      *
      * <p>链子是 {@code ForgeTeam.getColor() → EnumTeamColor}，再取
      * {@code EnumTeamColor.getEnumChatFormatting()}（**不是** {@code getColor()}，
-     * 那个返回的是 {@code Color4I} 的 RGB 对象，转不出码字符 —— 2026-10-31 踩过，
+     * 那个返回的是 {@code Color4I} 的 RGB 对象，转不出码字符 —— 2026-10-31 已确认，
      * 表现是「改了队伍颜色但聊天里一直是默认青色」）。
      */
     private static String teamColor(Object team) {
@@ -252,7 +252,7 @@ public final class TeamInfo {
      * <p><b>必须试 SRG 名</b>：{@code ForgeTeam.getTitle()} 返回的是 {@code IChatComponent}，
      * reobf 之后 {@code getUnformattedText()} 在运行时叫 {@code func_150260_c}，
      * 只按 MCP 名反射永远抛 {@code NoSuchMethodException} —— 表现就是「队伍明明有名字，
-     * 却一直走描述兜底」（2026-10-31 踩过：标题「华溪岛」显示成描述「温馨的小家」）。
+     * 却一直显示描述」（2026-10-31 发现：标题「华溪岛」显示成描述「温馨的小家」）。
      */
     private static String plain(Object component) {
         if (component == null) return "";
