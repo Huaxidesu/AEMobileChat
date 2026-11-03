@@ -1,4 +1,4 @@
-# GTNHChat
+# AEMobileChat
 
 面向 Minecraft 1.7.10（GTNH / Thermos）服务端的聊天格式化与跨服转发模组。
 
@@ -64,7 +64,7 @@
 
 ```bash
 git clone <repo>
-cd GTNHChat
+cd AEMobileChat
 ./gradlew build
 ```
 

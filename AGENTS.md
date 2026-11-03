@@ -1,6 +1,6 @@
 # AGENTS.md —— 交接入口
 
-GTNHChat：面向 Minecraft 1.7.10（GTNH / Thermos）服务端的聊天格式化与跨服转发模组。
+AEMobileChat：面向 Minecraft 1.7.10（GTNH / Thermos）服务端的聊天格式化与跨服转发模组。
 单 jar，服务端必需，客户端可选，代理端零安装。MIT，公开仓库。
 
 ## 接手先做三件事
@@ -102,7 +102,7 @@ taskkill //F //PID <pid>
 cd "D:/Game/Minecraft/Server/GTNH290RC2"
 printf 'gtchat status\n' > dumps/aemobile/cmd.txt
 # 回显在 logs/latest.log，不在 cmd.out（cmd.out 只有返回码）
-iconv -f GBK -t UTF-8 logs/latest.log | grep "GTNHChat"
+iconv -f GBK -t UTF-8 logs/latest.log | grep "AEMobileChat"
 ```
 
 可用子命令：`reload` / `version` / `status` /

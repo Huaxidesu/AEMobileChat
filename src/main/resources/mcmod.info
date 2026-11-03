@@ -5,7 +5,7 @@
     "description": "Chat formatting and cross-server chat relay for Minecraft 1.7.10 servers.",
     "version": "${modVersion}",
     "mcversion": "${minecraftVersion}",
-    "url": "https://github.com/Huaxidesu/GTNHChat",
+    "url": "https://github.com/Huaxidesu/AEMobileChat",
     "updateUrl": "",
     "authorList": ["Huaxidesu"],
     "credits": "",

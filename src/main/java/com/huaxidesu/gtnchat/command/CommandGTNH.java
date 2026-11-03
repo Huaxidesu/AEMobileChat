@@ -316,7 +316,7 @@ public class CommandGTNH implements ICommand {
     }
 
     private static void reply(ICommandSender sender, String text) {
-        sender.addChatMessage(new ChatComponentText("[GTNHChat] " + text));
+        sender.addChatMessage(new ChatComponentText("[AEMobileChat] " + text));
     }
 
     @Override
