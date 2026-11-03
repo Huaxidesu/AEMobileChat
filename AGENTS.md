@@ -102,7 +102,8 @@ taskkill //F //PID <pid>
 cd "D:/Game/Minecraft/Server/GTNH290RC2"
 printf 'gtchat status\n' > dumps/aemobile/cmd.txt
 # 回显在 logs/latest.log，不在 cmd.out（cmd.out 只有返回码）
-iconv -f GBK -t UTF-8 logs/latest.log | grep "AEMobileChat"
+# 日志标签取自 modName：1.2.0 及更早构建的是 [GTNHChat]，改名后新构建的是 [AEMobileChat]
+iconv -f GBK -t UTF-8 logs/latest.log | grep -E "\[(GTNHChat|AEMobileChat)\]"
 ```
 
 可用子命令：`reload` / `version` / `status` /
